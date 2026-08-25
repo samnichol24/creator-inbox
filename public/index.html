@@ -1016,21 +1016,20 @@ render();
   let status;
   try { status = await fetch('/api/status').then(r=>r.json()); }
   catch(e){ return; } // not served by backend (opened as plain file) → stay in demo mode
-  window.__live = !!status.connected;
+  window.__live = !!(status.connected || status.ytConnected);
 
   // 1) Make the Email "Connect" button start the real Google sign-in
   const origConnect = window.connect;
   window.connect = function(id, name){
-    if(id === 'email' || id === 'youtube'){ window.location.href = '/auth/google'; return; }
+    if(id === 'email'){ window.location.href = '/auth/google'; return; }
+    if(id === 'youtube'){ window.location.href = '/auth/google/youtube'; return; }
     origConnect(id, name);
   };
 
   // Reflect real connection state on the Connections screen
-  if(status.connected){
-    state.connections['email'] = true;
-    state.connections['youtube'] = true;
-    if(state.view === 'connect') renderConnect();
-  }
+  if(status.connected) state.connections['email'] = true;
+  if(status.ytConnected) state.connections['youtube'] = true;
+  if((status.connected || status.ytConnected) && state.view === 'connect') renderConnect();
   // Friendly heads-up if keys aren't in place yet
   if(!status.hasGoogleKeys){
     const c = CONNECTORS.find(c=>c.id==='email');
