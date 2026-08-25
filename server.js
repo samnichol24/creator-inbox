@@ -106,7 +106,7 @@ app.get('/api/messages', async (req, res) => {
     // Email (Gmail) — email account
     if (store.tokens) {
       try {
-        const emails = await listRecentEmails(store.tokens, 15);
+        const emails = await listRecentEmails(store.tokens, 50);
         emails.forEach(e => { e.ch = 'email'; });
         items = items.concat(emails);
       } catch (e) { console.error('gmail error', e.message); }
@@ -114,7 +114,7 @@ app.get('/api/messages', async (req, res) => {
     // YouTube comments — YouTube account (may be a different Google login)
     if (store.ytTokens) {
       try {
-        const yt = await listRecentComments(store.ytTokens, 15);
+        const yt = await listRecentComments(store.ytTokens, 100);
         items = items.concat(yt);
       } catch (e) { console.error('youtube error', e.message); }
     }
