@@ -28,6 +28,13 @@ const store = {
   cache: []         // last fetched emails
 };
 
+// Permanent connection: if a saved refresh token is present, we're always connected —
+// survives the server sleeping or restarting, no need to reconnect each time.
+if (process.env.GOOGLE_REFRESH_TOKEN) {
+  store.tokens = { refresh_token: process.env.GOOGLE_REFRESH_TOKEN };
+  store.email = process.env.CONNECTED_EMAIL || 'connected';
+}
+
 // ---------- Auth ----------
 app.get('/auth/google', (req, res) => {
   if (!hasGoogle) return res.status(400).send('Google keys not set yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your host settings.');
@@ -40,6 +47,8 @@ app.get('/auth/google/callback', async (req, res) => {
     store.tokens = tokens;
     store.email = await getProfileEmail(tokens);
     req.session.connected = true;
+    // print the refresh token once so it can be saved as GOOGLE_REFRESH_TOKEN for a permanent connection
+    if (tokens.refresh_token) console.log('SAVE_THIS_REFRESH_TOKEN=' + tokens.refresh_token);
     res.redirect('/?connected=1');
   } catch (e) {
     console.error(e);
