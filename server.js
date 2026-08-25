@@ -114,7 +114,7 @@ app.get('/api/messages', async (req, res) => {
     // YouTube comments — YouTube account (may be a different Google login)
     if (store.ytTokens) {
       try {
-        const yt = await listRecentComments(store.ytTokens, 100);
+        const yt = await listRecentComments(store.ytTokens, 90); // all comments from last 90 days
         items = items.concat(yt);
       } catch (e) { console.error('youtube error', e.message); }
     }
