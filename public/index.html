@@ -1021,13 +1021,14 @@ render();
   // 1) Make the Email "Connect" button start the real Google sign-in
   const origConnect = window.connect;
   window.connect = function(id, name){
-    if(id === 'email'){ window.location.href = '/auth/google'; return; }
+    if(id === 'email' || id === 'youtube'){ window.location.href = '/auth/google'; return; }
     origConnect(id, name);
   };
 
   // Reflect real connection state on the Connections screen
   if(status.connected){
     state.connections['email'] = true;
+    state.connections['youtube'] = true;
     if(state.view === 'connect') renderConnect();
   }
   // Friendly heads-up if keys aren't in place yet
@@ -1048,7 +1049,7 @@ render();
       let added = 0;
       emails.forEach(e=>{
         if(MESSAGES.find(x=>x.gid === e.gid)) return; // already have it
-        const nm = { id: idc++, ch:'email', name:e.name, handle:e.handle, text:e.text,
+        const nm = { id: idc++, ch: e.ch || 'email', name:e.name, handle:e.handle, text:e.text,
                      intent:'question', topic:'', time:e.time, live:true, gid:e.gid,
                      threadId:e.threadId, subject:e.subject };
         MESSAGES.unshift(nm);
