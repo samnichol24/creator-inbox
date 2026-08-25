@@ -27,7 +27,8 @@ const store = {
   ytTokens: null,   // YouTube OAuth tokens (can be a DIFFERENT Google account)
   ytName: null,     // connected YouTube channel name
   tone: { name: 'Sam', samples: '', signoff: '', emojis: '🙌 ✨ 💜 🔥' },
-  cache: []         // last fetched messages
+  cache: [],        // last fetched messages
+  replied: new Set() // gids we've already replied to (drop them from the list)
 };
 
 // Permanent connection: if saved refresh tokens are present, we're always connected —
@@ -118,6 +119,8 @@ app.get('/api/messages', async (req, res) => {
         items = items.concat(yt);
       } catch (e) { console.error('youtube error', e.message); }
     }
+    // drop anything already replied to, so sent items leave the list and new ones surface
+    items = items.filter(it => !store.replied.has(it.gid));
     // draft a reply for each
     for (const it of items) {
       it.draft = await generateDraft(it, store.tone);
@@ -149,6 +152,8 @@ app.post('/api/send', async (req, res) => {
         inReplyTo: cached.messageId
       });
     }
+    // remember we replied to this one so it drops off the list on the next refresh
+    if (gid) store.replied.add(gid);
     res.json({ ok: true });
   } catch (e) {
     console.error('send error', e.message);
