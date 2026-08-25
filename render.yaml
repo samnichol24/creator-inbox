@@ -1,0 +1,19 @@
+# Render Blueprint — lets Render set the app up almost automatically.
+services:
+  - type: web
+    name: creator-inbox
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true      # Render makes a secure random one for you
+      - key: BASE_URL
+        sync: false              # you'll paste your app URL after first deploy
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

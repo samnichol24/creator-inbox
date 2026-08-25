@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Creator Inbox — Unified Reply Portal</title>
+<style>
+  /* ============ THEME TOKENS ============ */
+  :root{
+    --accent:#6d5cff; --accent-2:#8b6bff; --good:#0ca30c; --down:#d03b3b;
+    --radius:14px;
+    /* platform brand colors (used only on small icons) */
+    --ig:#e1306c; --yt:#ff0000; --tt:#00f2ea; --snap:#fffc00;
+    --fb:#1877f2; --disc:#5865f2; --mail:#34b7f1; --sms:#12b76a;
+  }
+  :root[data-theme="light"]{
+    --bg:#f6f6f4; --surface:#ffffff; --surface-2:#f1f1ee; --surface-3:#ebebe7;
+    --line:#e8e7e2; --line-2:#dedcd5;
+    --txt:#181818; --txt-2:#565550; --txt-3:#9a988f;
+    --accent-soft:rgba(109,92,255,.09);
+    --good-soft:rgba(12,163,12,.10);
+    --bubble:#f3f3f0;
+    --shadow:0 1px 2px rgba(20,20,20,.05);
+    --chart-track:#eeeeea;
+    --tint-todo:rgba(208,59,59,.05); --tint-todo-h:rgba(208,59,59,.10);
+    --tint-sent:rgba(12,163,12,.08); --tint-sent-h:rgba(12,163,12,.13);
+    color-scheme:light;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1013; --surface:#16181d; --surface-2:#1b1e24; --surface-3:#22262e;
+    --line:#24272f; --line-2:#2e323b;
+    --txt:#e9ecf1; --txt-2:#a1a8b4; --txt-3:#6b7280;
+    --accent:#8b78ff; --accent-2:#a488ff;
+    --accent-soft:rgba(139,120,255,.15);
+    --good:#2fd98a; --good-soft:rgba(47,217,138,.13);
+    --bubble:#20242c;
+    --shadow:0 2px 8px rgba(0,0,0,.3);
+    --chart-track:#232730;
+    --tint-todo:rgba(255,91,106,.08); --tint-todo-h:rgba(255,91,106,.14);
+    --tint-sent:rgba(47,217,138,.09); --tint-sent-h:rgba(47,217,138,.15);
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
+  button{font-family:inherit;cursor:pointer}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:20px;border:2px solid transparent;background-clip:padding-box}
+
+  .app{display:grid;grid-template-columns:236px 1fr;height:100vh;overflow:hidden}
+
+  /* ============ SIDEBAR ============ */
+  .sidebar{background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+  .brand{display:flex;align-items:center;gap:10px;padding:20px 18px 16px}
+  .brand .logo{width:30px;height:30px;border-radius:9px;background:var(--accent);display:grid;place-items:center}
+  .brand .logo svg{width:16px;height:16px}
+  .brand h1{font-size:14.5px;margin:0;font-weight:650}
+  .brand p{margin:1px 0 0;font-size:11px;color:var(--txt-3)}
+
+  .nav{padding:4px 12px}
+  .nav-btn{width:100%;display:flex;align-items:center;gap:11px;padding:9px 11px;border:0;background:transparent;
+    color:var(--txt-2);border-radius:9px;font-size:13.5px;font-weight:500;text-align:left;margin-bottom:1px}
+  .nav-btn:hover{background:var(--surface-2);color:var(--txt)}
+  .nav-btn.active{background:var(--accent-soft);color:var(--accent)}
+  .nav-btn svg{width:17px;height:17px}
+
+  .side-label{padding:16px 18px 8px;font-size:10.5px;letter-spacing:.7px;text-transform:uppercase;color:var(--txt-3);font-weight:600}
+  .channels{overflow-y:auto;flex:1;padding:0 12px 12px}
+  .chan{width:100%;display:flex;align-items:center;gap:11px;padding:8px 10px;border:0;background:transparent;
+    color:var(--txt-2);border-radius:9px;font-size:13px;text-align:left;margin-bottom:1px}
+  .chan:hover{background:var(--surface-2);color:var(--txt)}
+  .chan.active{background:var(--surface-2);color:var(--txt);font-weight:600}
+  .chan .ico{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;flex:none}
+  .chan .ico svg{width:12px;height:12px}
+  .chan .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .badge{min-width:19px;height:18px;padding:0 6px;border-radius:20px;background:var(--surface-3);color:var(--txt-2);
+    font-size:11px;font-weight:600;display:grid;place-items:center}
+  .chan.active .badge{background:var(--accent);color:#fff}
+
+  .side-foot{padding:12px 14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .avatar{width:30px;height:30px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font-weight:650;font-size:12px;color:#fff;flex:none}
+  .side-foot .nm{font-size:12.5px;font-weight:600}
+  .side-foot .sub{font-size:11px;color:var(--txt-3)}
+  .theme-toggle{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--surface-2);
+    display:grid;place-items:center;color:var(--txt-2)}
+  .theme-toggle:hover{color:var(--txt);border-color:var(--line-2)}
+  .theme-toggle svg{width:16px;height:16px}
+
+  /* ============ MAIN ============ */
+  .main{display:flex;flex-direction:column;overflow:hidden;min-width:0}
+  .topbar{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--line);background:var(--surface)}
+  .topbar h2{margin:0;font-size:16px;font-weight:650}
+  .topbar .sub{font-size:12px;color:var(--txt-3);margin-top:2px}
+  .search{flex:1;max-width:320px;position:relative}
+  .search input{width:100%;padding:9px 12px 9px 34px;background:var(--surface-2);border:1px solid transparent;
+    border-radius:10px;color:var(--txt);font-size:13px;outline:none}
+  .search input:focus{border-color:var(--accent);background:var(--surface)}
+  .search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--txt-3)}
+  .spacer{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:10px;border:1px solid var(--line);
+    background:var(--surface);color:var(--txt);font-size:13px;font-weight:600}
+  .btn:hover{background:var(--surface-2)}
+  .btn svg{width:15px;height:15px}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .btn.good{background:var(--good);border-color:var(--good);color:#fff}
+  .btn.good:hover{filter:brightness(1.05)}
+  .btn.learn{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .btn.learn:hover{background:var(--accent);color:#fff}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--txt-2)}
+  .btn.ghost:hover{background:var(--surface-2);color:var(--txt)}
+  .btn.sm{padding:7px 11px;font-size:12.5px}
+
+  .filters{display:flex;align-items:center;gap:8px;padding:12px 22px;border-bottom:1px solid var(--line);background:var(--surface);overflow-x:auto}
+  .chip{padding:6px 13px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--txt-2);
+    font-size:12.5px;font-weight:600;white-space:nowrap}
+  .chip:hover{color:var(--txt)}
+  .chip.active{background:var(--txt);color:var(--surface);border-color:var(--txt)}
+  .filters .count{margin-left:auto;font-size:12px;color:var(--txt-3);white-space:nowrap;padding-left:10px}
+
+  /* ============ INBOX ============ */
+  .inbox{display:grid;grid-template-columns:minmax(320px,400px) 1fr;flex:1;overflow:hidden}
+  .list{border-right:1px solid var(--line);overflow-y:auto;background:var(--bg)}
+  .item{display:flex;gap:12px;padding:15px 18px;border-bottom:1px solid var(--line);cursor:pointer;position:relative;transition:background .12s}
+  .item.todo{background:var(--tint-todo)}
+  .item.done{background:var(--tint-sent);opacity:.85}
+  .item.todo:hover{background:var(--tint-todo-h)}
+  .item.done:hover{background:var(--tint-sent-h)}
+  .item.active:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+  .item.active .it-name{font-weight:700}
+  .thumb{position:relative;flex:none}
+  .thumb .av{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:650;color:#fff;font-size:14px}
+  .thumb .pf{position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:6px;border:2px solid var(--bg);display:grid;place-items:center}
+  .item.active .thumb .pf{border-color:var(--surface)}
+  .thumb .pf svg{width:10px;height:10px}
+  .it-body{flex:1;min-width:0}
+  .it-top{display:flex;align-items:baseline;gap:7px}
+  .it-name{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .it-handle{font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+  .it-time{font-size:11.5px;color:var(--txt-3);white-space:nowrap;flex:none}
+  .it-msg{font-size:12.5px;color:var(--txt-2);margin-top:4px;padding-right:46px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45}
+  .it-unread{position:absolute;right:16px;bottom:16px;width:8px;height:8px;border-radius:50%;background:var(--down)}
+  .it-sent{position:absolute;right:15px;bottom:14px;font-size:11px;font-weight:600;color:var(--good);display:flex;align-items:center;gap:4px}
+  .it-sent svg{width:12px;height:12px}
+
+  .empty{display:grid;place-items:center;height:100%;color:var(--txt-3);text-align:center;padding:40px}
+  .empty svg{width:42px;height:42px;opacity:.5;margin-bottom:14px}
+  .empty b{color:var(--txt-2)}
+
+  /* ============ DETAIL ============ */
+  .detail{overflow-y:auto;background:var(--surface);display:flex;flex-direction:column}
+  .d-head{display:flex;align-items:center;gap:12px;padding:18px 26px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:2}
+  .d-head .av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-weight:650;color:#fff}
+  .d-head .meta h3{margin:0;font-size:15px;font-weight:650}
+  .d-head .meta .chn{font-size:12px;color:var(--txt-3);display:flex;align-items:center;gap:6px;margin-top:3px}
+  .d-head .meta .chn .ico{width:15px;height:15px;border-radius:5px;display:grid;place-items:center}
+  .d-head .meta .chn .ico svg{width:9px;height:9px}
+  .d-head .kbd-hint{margin-left:auto;font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:5px}
+  .kbd{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border:1px solid var(--line-2);border-bottom-width:2px;border-radius:5px;font-size:11px;color:var(--txt-2);background:var(--surface-2)}
+  .conv{padding:24px 26px;flex:1}
+  .bubble-in{background:var(--bubble);border-radius:4px 15px 15px 15px;padding:14px 16px;max-width:80%;font-size:14px;line-height:1.5}
+  .bubble-in .m-meta{font-size:11px;color:var(--txt-3);margin-top:8px}
+
+  .composer{border-top:1px solid var(--line);background:var(--surface);padding:16px 26px 22px;position:sticky;bottom:0}
+  .c-label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--txt-3);margin-bottom:10px}
+  .c-label svg{width:14px;height:14px;color:var(--accent)}
+  .c-label .pill{margin-left:auto;font-size:11px;color:var(--txt-3)}
+  .draft-box{width:100%;min-height:84px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;
+    color:var(--txt);font-size:14px;padding:14px;resize:vertical;line-height:1.55;outline:none;font-family:inherit}
+  .draft-box:focus{border-color:var(--accent);background:var(--surface)}
+  .c-actions{display:flex;align-items:flex-start;gap:9px;margin-top:12px;flex-wrap:wrap}
+  .act{display:flex;flex-direction:column;align-items:center;gap:4px}
+  .sc{font-size:10px;color:var(--txt-3);white-space:nowrap;letter-spacing:.2px}
+  .sc b{font-weight:600;color:var(--txt-2)}
+  .mini{font-size:11px;color:var(--txt-3);padding-top:9px}
+
+  /* ============ PAGE (tone + analytics) ============ */
+  .page{flex:1;overflow-y:auto;padding:30px 40px 70px;background:var(--bg)}
+  .page.hidden,.inbox.hidden,.filters.hidden{display:none}
+  .wrap{max-width:920px;margin:0 auto}
+  .page-head{margin-bottom:24px}
+  .page-head h2{margin:0 0 6px;font-size:21px;font-weight:680}
+  .page-head p{margin:0;color:var(--txt-2);font-size:13.5px;line-height:1.6;max-width:660px}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow)}
+  .card h4{margin:0 0 4px;font-size:14px;font-weight:650;display:flex;align-items:center;gap:8px}
+  .card h4 svg{width:16px;height:16px;color:var(--accent)}
+  .card .hint{font-size:12px;color:var(--txt-3);margin:0 0 14px;line-height:1.5}
+  .stack{display:flex;flex-direction:column;gap:16px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+  textarea.field,input.field{width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;
+    color:var(--txt);font-size:13.5px;padding:12px 13px;outline:none;font-family:inherit;line-height:1.55}
+  textarea.field:focus,input.field:focus{border-color:var(--accent);background:var(--surface)}
+  textarea.field{min-height:118px;resize:vertical}
+  .fld-label{font-size:12px;font-weight:600;color:var(--txt-2);margin-bottom:7px;display:block}
+  .vibes{display:flex;flex-wrap:wrap;gap:8px}
+  .vibe{padding:8px 14px;border-radius:20px;border:1px solid var(--line);background:var(--surface-2);color:var(--txt-2);font-size:13px;font-weight:600}
+  .vibe.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px}
+  .seg button{padding:7px 15px;border:0;background:transparent;color:var(--txt-2);border-radius:8px;font-size:12.5px;font-weight:600}
+  .seg button.active{background:var(--accent);color:#fff}
+  .preview{background:var(--surface-2);border:1px dashed var(--line-2);border-radius:10px;padding:14px 16px;font-size:13.5px;line-height:1.6;color:var(--txt);white-space:pre-wrap;min-height:56px}
+  .preview .ph{color:var(--txt-3);font-style:italic}
+  .save-bar{position:sticky;bottom:0;display:flex;gap:12px;align-items:center;background:linear-gradient(180deg,transparent,var(--bg) 45%);padding:18px 0 4px;margin-top:18px}
+  .saved-flag{font-size:12.5px;color:var(--good);display:none;align-items:center;gap:6px;font-weight:600}
+  .saved-flag.show{display:flex}
+  .saved-flag svg{width:15px;height:15px}
+
+  /* ============ ANALYTICS ============ */
+  .a-controls{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+  .a-controls .spacer{flex:1}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+  .kpi .l{font-size:12px;color:var(--txt-3);font-weight:500}
+  .kpi .n{font-size:26px;font-weight:720;margin-top:6px;letter-spacing:-.5px}
+  .kpi .d{font-size:12px;font-weight:600;margin-top:6px;display:inline-flex;align-items:center;gap:4px}
+  .kpi .d svg{width:13px;height:13px}
+  .d.up{color:var(--good)} .d.down{color:var(--down)}
+  .kpi .sub{font-size:11px;color:var(--txt-3);margin-top:4px}
+
+  .chart-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px 16px;box-shadow:var(--shadow);margin-bottom:18px}
+  .chart-card .ch-head{display:flex;align-items:baseline;gap:10px;margin-bottom:18px}
+  .chart-card .ch-head h4{margin:0;font-size:14px;font-weight:650}
+  .chart-card .ch-head .ch-sub{font-size:12px;color:var(--txt-3);margin-left:auto}
+  .bars{display:flex;align-items:flex-end;gap:10px;height:210px;padding-top:10px}
+  .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:8px;height:100%;position:relative}
+  .bar{width:100%;max-width:46px;background:var(--accent);border-radius:5px 5px 0 0;min-height:3px;transition:opacity .12s;position:relative}
+  .bar-col:hover .bar{opacity:.82}
+  .bar.dim{background:var(--chart-track)}
+  .bar-x{font-size:11px;color:var(--txt-3);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .bar-tip{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--txt);color:var(--surface);
+    padding:7px 10px;border-radius:8px;font-size:11.5px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.2);text-align:center;line-height:1.5}
+  .bar-col:hover .bar-tip{opacity:1}
+  .bar-tip b{font-size:13px}
+  .bar-tip .t-d{font-weight:600}
+  .t-d.up{color:#7ee0a6}.t-d.down{color:#ff9b9b}
+  :root[data-theme="light"] .bar-tip .t-d.up{color:#7ee0a6}
+
+  .platform-list{display:flex;flex-direction:column;gap:13px;margin-top:4px}
+  .pf-row{display:flex;align-items:center;gap:12px}
+  .pf-row .ico{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;flex:none}
+  .pf-row .ico svg{width:14px;height:14px}
+  .pf-row .pf-name{width:150px;font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+  .pf-track{flex:1;height:9px;background:var(--chart-track);border-radius:20px;overflow:hidden}
+  .pf-fill{height:100%;background:var(--accent);border-radius:20px}
+  .pf-val{width:96px;text-align:right;font-size:12.5px;font-variant-numeric:tabular-nums;flex:none}
+  .pf-val b{font-weight:650}
+  .pf-val span{color:var(--txt-3);font-size:11.5px}
+
+  /* ============ TOAST ============ */
+  .toast-wrap{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:100;display:flex;flex-direction:column;gap:10px;align-items:center}
+  .toast{background:var(--txt);color:var(--surface);padding:11px 17px;border-radius:11px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:9px;box-shadow:0 8px 30px rgba(0,0,0,.25);animation:pop .22s ease}
+  .toast svg{width:15px;height:15px;color:#6ee29f}
+  @keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  #refreshBtn.spin svg{animation:spin .6s linear}
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+  /* ============ FANS ============ */
+  .fan-controls{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .fan-row{display:flex;align-items:center;gap:14px;padding:13px 12px;margin:0 -12px;border-bottom:1px solid var(--line);border-radius:9px}
+  .fan-row:last-child{border-bottom:0}
+  .fan-row.clickable{cursor:pointer;transition:background .12s}
+  .fan-row.clickable:hover{background:var(--surface-2)}
+  .fan-open{width:22px;flex:none;display:flex;justify-content:center;color:var(--txt-3);opacity:0;transition:opacity .12s,color .12s}
+  .fan-row.clickable:hover .fan-open{opacity:1}
+  .fan-row.clickable:hover .fan-open{color:var(--accent)}
+  .fan-open svg{width:15px;height:15px}
+  .fan-rank{width:24px;text-align:center;font-weight:700;font-size:14px;color:var(--txt-3);font-variant-numeric:tabular-nums;flex:none}
+  .fan-rank.g1{color:#e0a53a}.fan-rank.g2{color:#9aa3ad}.fan-rank.g3{color:#c08457}
+  .fan-av{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:650;color:#fff;font-size:14px;flex:none;position:relative}
+  .fan-av .pf{position:absolute;right:-3px;bottom:-3px;width:16px;height:16px;border-radius:5px;border:2px solid var(--surface);display:grid;place-items:center}
+  .fan-av .pf svg{width:9px;height:9px}
+  .fan-id{width:210px;flex:none;min-width:0}
+  .fan-id .nm{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fan-id .hd{font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fan-count{width:150px;text-align:right;font-size:13px;flex:none;font-variant-numeric:tabular-nums}
+  .fan-count b{font-weight:700;font-size:14px}
+  .fan-count span{color:var(--txt-3);font-size:11.5px}
+
+  /* ============ CONNECT ============ */
+  .conn-progress{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:18px;box-shadow:var(--shadow)}
+  .conn-progress .bar{flex:1;height:8px;background:var(--chart-track);border-radius:20px;overflow:hidden}
+  .conn-progress .bar span{display:block;height:100%;background:var(--good);border-radius:20px;transition:width .3s}
+  .conn-progress .lbl{font-size:13px;font-weight:600;white-space:nowrap}
+  .conn-grid{display:flex;flex-direction:column;gap:12px}
+  .conn-row{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow)}
+  .conn-ico{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;flex:none}
+  .conn-ico svg{width:22px;height:22px}
+  .conn-main{flex:1;min-width:0}
+  .conn-main .nm{font-size:14.5px;font-weight:650;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .conn-main .cap{font-size:12.5px;color:var(--txt-2);margin-top:3px;line-height:1.45}
+  .tag{font-size:10.5px;font-weight:700;letter-spacing:.3px;padding:3px 8px;border-radius:6px;text-transform:uppercase;white-space:nowrap}
+  .tag.ok{background:var(--good-soft);color:var(--good)}
+  .tag.warn{background:rgba(250,178,25,.16);color:#b7791f}
+  .tag.none{background:var(--surface-3);color:var(--txt-3)}
+  :root[data-theme="dark"] .tag.warn{color:#fab219}
+  .conn-action{flex:none}
+  .conn-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:13px;font-weight:600}
+  .conn-btn:hover{filter:brightness(1.06)}
+  .conn-btn.connected{background:var(--good-soft);border-color:transparent;color:var(--good);cursor:default}
+  .conn-btn.disabled{background:transparent;border-color:var(--line);color:var(--txt-3);cursor:not-allowed}
+  .conn-btn svg{width:14px;height:14px}
+  .conn-dis{background:none;border:0;color:var(--txt-3);font-size:11.5px;margin-top:6px;cursor:pointer;text-decoration:underline}
+  .conn-note{font-size:12px;color:var(--txt-2);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 15px;margin-top:20px;line-height:1.55}
+  .conn-note b{color:var(--txt)}
+
+  @media(max-width:1050px){
+    .inbox{grid-template-columns:1fr}
+    .detail{display:none}
+    .inbox.show-detail .list{display:none}
+    .inbox.show-detail .detail{display:flex}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 4V5z" fill="#fff"/></svg></div>
+      <div><h1>Creator Inbox</h1><p>All your fans, one place</p></div>
+    </div>
+
+    <div class="nav">
+      <button class="nav-btn active" data-view="inbox" onclick="setView('inbox')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 8l9 6 9-6M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1z"/></svg>Inbox
+      </button>
+      <button class="nav-btn" data-view="analytics" onclick="setView('analytics')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3v18h18M7 15l3-4 3 3 4-6"/></svg>Analytics
+      </button>
+      <button class="nav-btn" data-view="tone" onclick="setView('tone')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>Tone Sheet
+      </button>
+      <button class="nav-btn" data-view="fans" onclick="setView('fans')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15a4 4 0 100-8 4 4 0 000 8z"/><path d="M5 21a7 7 0 0114 0"/><path d="M17 4l1.2 2.4L21 7l-2 1.8.4 2.7L17 10l-2.4 1.5.4-2.7-2-1.8 2.8-.6z" style="display:none"/></svg>Fans
+      </button>
+      <button class="nav-btn" data-view="connect" onclick="setView('connect')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 7H6a3 3 0 000 6h3M15 7h3a3 3 0 010 6h-3M8 10h8"/></svg>Connections
+      </button>
+    </div>
+
+    <div class="side-label">Channels</div>
+    <div class="channels" id="channels"></div>
+
+    <div class="side-foot">
+      <div class="avatar">SN</div>
+      <div><div class="nm">Sam Nicholson</div><div class="sub">Creator workspace</div></div>
+      <button class="theme-toggle" id="themeToggle" title="Toggle light / dark" onclick="toggleTheme()"></button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div><h2 id="topTitle">All Messages</h2><div class="sub" id="topSub"></div></div>
+      <div class="search" id="searchWrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="search" placeholder="Search messages…" oninput="render()" />
+      </div>
+      <div class="spacer"></div>
+      <button class="btn sm" id="refreshBtn" onclick="refreshMessages()" title="Check for new messages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg>Refresh
+      </button>
+      <button class="btn ghost sm" id="regenAllBtn" onclick="regenerateAll()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg>Regenerate
+      </button>
+      <button class="btn primary" id="approveAllBtn" onclick="approveAll()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg>Approve all
+      </button>
+    </div>
+
+    <div class="filters" id="filters">
+      <button class="chip active" data-f="all" onclick="setTypeFilter('all')">All</button>
+      <button class="chip" data-f="dm" onclick="setTypeFilter('dm')">DMs &amp; messages</button>
+      <button class="chip" data-f="comment" onclick="setTypeFilter('comment')">Comments</button>
+      <button class="chip" data-f="unread" onclick="setTypeFilter('unread')">Needs reply</button>
+      <button class="chip" data-f="sent" onclick="setTypeFilter('sent')">Sent</button>
+      <span class="count" id="filterCount"></span>
+    </div>
+
+    <div class="inbox" id="inbox">
+      <div class="list" id="list"></div>
+      <div class="detail" id="detail"></div>
+    </div>
+
+    <div class="page hidden" id="analyticsPage"></div>
+    <div class="page hidden" id="tonePage"></div>
+    <div class="page hidden" id="fansPage"></div>
+    <div class="page hidden" id="connectPage"></div>
+  </main>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+/* ============ ICONS ============ */
+const ICON = {
+  instagram:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2.9c2.96 0 3.31.01 4.48.06 1.08.05 1.67.23 2.06.38.52.2.89.44 1.28.83.39.39.63.76.83 1.28.15.39.33.98.38 2.06.05 1.17.06 1.52.06 4.48s-.01 3.31-.06 4.48c-.05 1.08-.23 1.67-.38 2.06-.2.52-.44.89-.83 1.28-.39.39-.76.63-1.28.83-.39.15-.98.33-2.06.38-1.17.05-1.52.06-4.48.06s-3.31-.01-4.48-.06c-1.08-.05-1.67-.23-2.06-.38a3.4 3.4 0 01-1.28-.83 3.4 3.4 0 01-.83-1.28c-.15-.39-.33-.98-.38-2.06C2.91 15.31 2.9 14.96 2.9 12s.01-3.31.06-4.48c.05-1.08.23-1.67.38-2.06.2-.52.44-.89.83-1.28.39-.39.76-.63 1.28-.83.39-.15.98-.33 2.06-.38C8.69 2.91 9.04 2.9 12 2.9zm0 3.15A5.95 5.95 0 1017.95 12 5.95 5.95 0 0012 6.05zm0 9.82A3.87 3.87 0 1115.87 12 3.87 3.87 0 0112 15.87zm6.18-9.99a1.39 1.39 0 11-1.39-1.39 1.39 1.39 0 011.39 1.39z"/></svg>',
+  youtube:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M10 15.5l6-3.5-6-3.5v7z"/></svg>',
+  tiktok:'<svg viewBox="0 0 24 24" fill="#000"><path d="M16.5 5.6a4.7 4.7 0 01-2.9-2V13a4.5 4.5 0 11-4.5-4.5c.2 0 .4 0 .6.05v2.4a2.1 2.1 0 102.1 2.05V2h2.3a4.7 4.7 0 002.4 3.6z"/></svg>',
+  snapchat:'<svg viewBox="0 0 24 24" fill="#000"><path d="M12 3c2.4 0 3.9 2 3.9 4.4 0 .8-.1 1.5-.1 1.5s.6.3 1.2.1c.4-.1.7.5.3.8-.3.2-1 .4-1.1.8-.1.4 1 2 2.5 2.4.4.1.3.6 0 .7-.6.2-1.6.2-1.8.7-.1.4.2 1-.3 1.1-.4.1-1-.4-1.9-.2-.8.2-1.3 1.2-2.7 1.2s-1.9-1-2.7-1.2c-.9-.2-1.5.3-1.9.2-.5-.1-.2-.7-.3-1.1-.2-.5-1.2-.5-1.8-.7-.3-.1-.4-.6 0-.7 1.5-.4 2.6-2 2.5-2.4-.1-.4-.8-.6-1.1-.8-.4-.3-.1-.9.3-.8.6.2 1.2-.1 1.2-.1s-.1-.7-.1-1.5C8.1 5 9.6 3 12 3z"/></svg>',
+  facebook:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M13.5 21v-8h2.7l.4-3.1h-3.1V7.9c0-.9.25-1.5 1.55-1.5h1.65V3.6c-.29-.04-1.28-.13-2.43-.13-2.4 0-4.04 1.47-4.04 4.16v2.32H7.5V13h2.72v8h3.28z"/></svg>',
+  messenger:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M12 3C6.9 3 3 6.8 3 11.9c0 2.7 1.1 5 2.9 6.6V22l2.6-1.4c.7.2 1.5.3 2.5.3 5.1 0 9-3.8 9-8.9S17.1 3 12 3zm.9 11.5l-2.3-2.4-4.4 2.4 4.8-5 2.3 2.4 4.3-2.4-4.7 5z"/></svg>',
+  discord:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M19.3 6.2A16 16 0 0015.4 5l-.2.4a14.9 14.9 0 014.4 2.2 13.6 13.6 0 00-11.3 0A14.9 14.9 0 018.8 5.4L8.6 5A16 16 0 004.7 6.2C2.3 9.8 1.6 13.3 1.9 16.7a16.2 16.2 0 004.9 2.5l.6-1a10.6 10.6 0 01-1.7-.8l.4-.3a11.5 11.5 0 009.8 0l.4.3c-.5.3-1.1.6-1.7.8l.6 1a16.1 16.1 0 004.9-2.5c.4-4-.7-7.4-2.8-10.5zM8.9 14.5c-.9 0-1.7-.8-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9zm6.2 0c-.9 0-1.7-.8-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.7 1.9-1.7 1.9z"/></svg>',
+  mail:'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
+  sms:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M4 4h16a1 1 0 011 1v11a1 1 0 01-1 1H8l-4 4V5a1 1 0 011-1z"/></svg>'
+};
+
+const CHANNELS = [
+  {id:'ig-dm',   name:'Instagram DMs',      glyph:'instagram', bg:'linear-gradient(135deg,#feda75,#d62976,#962fbf)', fg:'#fff', type:'dm'},
+  {id:'ig-cmt',  name:'Instagram Comments', glyph:'instagram', bg:'linear-gradient(135deg,#feda75,#d62976,#962fbf)', fg:'#fff', type:'comment'},
+  {id:'yt-cmt',  name:'YouTube Comments',   glyph:'youtube',   bg:'#ff0000', fg:'#fff', type:'comment'},
+  {id:'tt-cmt',  name:'TikTok Comments',    glyph:'tiktok',    bg:'#010101', fg:'#00f2ea', type:'comment'},
+  {id:'tt-dm',   name:'TikTok DMs',         glyph:'tiktok',    bg:'#010101', fg:'#ff0050', type:'dm'},
+  {id:'snap-cmt',name:'Snapchat Comments',  glyph:'snapchat',  bg:'#fffc00', fg:'#000', type:'comment'},
+  {id:'fb-cmt',  name:'Facebook Comments',  glyph:'facebook',  bg:'#1877f2', fg:'#fff', type:'comment'},
+  {id:'fb-msgr', name:'Facebook Messenger', glyph:'messenger', bg:'linear-gradient(135deg,#00b2ff,#a033ff,#ff5b8e)', fg:'#fff', type:'dm'},
+  {id:'discord', name:'Discord',            glyph:'discord',   bg:'#5865f2', fg:'#fff', type:'dm'},
+  {id:'email',   name:'Fan Email',          glyph:'mail',      bg:'#34b7f1', fg:'#fff', type:'dm'},
+  {id:'sms',     name:'Fan SMS / Text',     glyph:'sms',       bg:'#12b76a', fg:'#fff', type:'dm'},
+];
+const CH = Object.fromEntries(CHANNELS.map(c=>[c.id,c]));
+function colorGlyph(c){ let g=ICON[c.glyph]; if(c.fg&&c.fg!=='#fff') g=g.replace(/#fff/g,c.fg).replace(/#000/g,c.fg); return g; }
+
+/* ============ MOCK MESSAGES ============ */
+let idc=1;
+const MESSAGES=[
+  {id:idc++,ch:'ig-dm',name:'Maya Rivera',handle:'@mayarivera',text:"okok your last reel literally made my whole week 😭 how do you stay so consistent?? i keep quitting after like 3 days lol",intent:'question',topic:'staying consistent',time:'4m'},
+  {id:idc++,ch:'yt-cmt',name:'Jordan_TV',handle:'Jordan_TV',text:"Been here since 2k subs and watching you blow up is insane. Congrats man 🔥",intent:'compliment',topic:'the milestone',time:'11m'},
+  {id:idc++,ch:'tt-cmt',name:'lil.bee',handle:'@lil.bee',text:"wait what camera do you shoot on?? the quality is unreal",intent:'question',topic:'your camera setup',time:'18m'},
+  {id:idc++,ch:'email',name:'Priya Nair',handle:'priya.nair@gmail.com',text:"Hi! I run partnerships at a small skincare brand and we'd love to send you some product + talk about a paid collab for Q3. Are you taking brand deals right now?",intent:'collab',topic:'a possible brand collab',time:'32m'},
+  {id:idc++,ch:'discord',name:'ghostbyte',handle:'ghostbyte#0042',text:"yo the community call last night was so good, honestly felt like therapy 😅 thank you for showing up every week",intent:'support',topic:'the community call',time:'46m'},
+  {id:idc++,ch:'sms',name:'Alex (fan line)',handle:'+1 (312) 555-0148',text:"is the merch drop still happening friday?? i've been saving up 🙏",intent:'question',topic:'the merch drop',time:'52m'},
+  {id:idc++,ch:'tt-dm',name:'sofiaaa',handle:'@sofiaaa.k',text:"you probably won't see this but you got me through a really hard year. just wanted you to know that 💜",intent:'support',topic:'a hard year',time:'1h'},
+  {id:idc++,ch:'ig-cmt',name:'devon.makes',handle:'@devon.makes',text:"the color grade on this is CRAZY, drop the LUT king 👑",intent:'question',topic:'your color grade',time:'1h'},
+  {id:idc++,ch:'fb-msgr',name:'Linda Carter',handle:'Linda Carter',text:"My daughter is 12 and wants to start posting like you. Any advice for a nervous parent? 😊",intent:'question',topic:'advice for a young creator',time:'2h'},
+  {id:idc++,ch:'fb-cmt',name:'Marcus Bell',handle:'Marcus Bell',text:"Just shared this with my whole team at work. Gold. 🙌",intent:'compliment',topic:'sharing it with his team',time:'2h'},
+  {id:idc++,ch:'snap-cmt',name:'kaii',handle:'@kaii_j',text:"okay but WHEN is part 2 dropping i need it 😩",intent:'hype',topic:'part 2',time:'3h'},
+  {id:idc++,ch:'yt-cmt',name:'realtalk88',handle:'realtalk88',text:"honestly this is overrated, anyone could make this content",intent:'troll',topic:'',time:'3h'},
+  {id:idc++,ch:'tt-cmt',name:'jenna',handle:'@jenna.rose',text:"the way you edit is teaching me so much, screenshotting every frame lol",intent:'compliment',topic:'your editing',time:'4h'},
+  {id:idc++,ch:'ig-dm',name:'Theo',handle:'@theo.shoots',text:"bro would you ever do a 1-on-1 coaching call? i'll pay, i'm serious about leveling up my page",intent:'collab',topic:'a coaching call',time:'5h'},
+  {id:idc++,ch:'discord',name:'nova',handle:'nova#7781',text:"question — for the giveaway do we need to be in the server before friday or is anytime ok?",intent:'question',topic:'the giveaway rules',time:'6h'},
+  {id:idc++,ch:'email',name:'Coach Dan',handle:'dan@peakcreators.co',text:"Loved your talk. Would you be open to being a guest on the Peak Creators podcast next month? 20–30 min, fully remote.",intent:'collab',topic:'a podcast guest spot',time:'7h'},
+  {id:idc++,ch:'sms',name:'Riley (fan line)',handle:'+1 (773) 555-0199',text:"happy birthday!!! hope today is amazing you deserve it 🎉",intent:'personal',topic:'your birthday',time:'8h'},
+  {id:idc++,ch:'snap-cmt',name:'mateo',handle:'@mateo.g',text:"first!! also the transitions here are buttery 🧈",intent:'compliment',topic:'the transitions',time:'9h'},
+];
+
+/* ============ TONE ============ */
+let tone={samples:'',phrases:'',signoff:'',vibe:'chill',emojis:'🙌 ✨ 💜 🔥 🥹 🎉',dos:'',donts:''};
+const VIBES=[{id:'chill',label:'Chill & casual'},{id:'hype',label:'Hype & energetic'},{id:'sweet',label:'Warm & sweet'},{id:'funny',label:'Funny & playful'},{id:'pro',label:'Polished & pro'}];
+
+/* ============ DRAFT GENERATION ============ */
+function firstName(n){return (n||'').split(/[\s(]/)[0].replace(/[^A-Za-z].*$/,'')||'friend';}
+function pick(a,s){return a[s%a.length];}
+const EMOJI_RE=/[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}‍️]/gu;
+function parseEmojis(str){return (String(str||'').match(/\p{Extended_Pictographic}/gu))||[];}
+function bodyFor(m){const t=m.topic;switch(m.intent){
+  case 'compliment':return[`this honestly means a lot — thank you for ${t}`,`okay this made my day, seriously appreciate you noticing ${t}`,`thank you!! comments like this are why i keep going`];
+  case 'question':return[`great question — ${t} is actually what people ask most. short version: keep it simple and stay consistent, i'll do a full breakdown soon`,`love that you asked about ${t}! i'll drop a proper answer on this because it deserves more than a comment`,`ohh ${t} — happy to help, i'll DM you the details so it's not lost in here`];
+  case 'collab':return[`appreciate you reaching out about ${t}! i'm taking a few of these right now — mind sending over the details and timeline?`,`this sounds interesting. i'm open to ${t} — let's find a time to hop on a quick call and see if it's a fit`,`thanks for thinking of me for ${t}! send the specifics and i'll get back to you fast`];
+  case 'support':return[`this got me a little emotional ngl. thank you for ${t} — i'm really glad this space helps. i'm rooting for you`,`messages like this are everything. thank you — and i'm proud of you for getting through ${t}`,`i see you, and i'm so glad you're here. thank you for trusting me with ${t}`];
+  case 'hype':return[`it's coming SO soon — ${t} is basically done and i think you're gonna love it`,`${t} is on the way i promise!! thanks for being this excited, it fuels me`,`patience my friend 😅 ${t} drops this week, mark it`];
+  case 'troll':return[`all good — not everything's for everyone. appreciate you stopping by anyway`,`fair enough! thanks for watching either way`,`respect the honesty — i'll keep working on it`];
+  case 'personal':return[`awww thank you so much!! that genuinely made me smile — appreciate you thinking of me for ${t}`,`you're the best, thank you for ${t}! 🥹`,`okay this is so sweet, thank you for remembering ${t}`];
+  default:return[`thanks so much for reaching out!`];}}
+function greetingFor(m){const fn=firstName(m.name);if(m.intent==='troll')return '';
+  const casual=[`${fn}!! `,`hey ${fn}, `,`${fn} — `,`omg ${fn} `],warm=[`Hi ${fn}, `,`${fn}, `,`Aw ${fn} — `],pro=[`Hi ${fn}, `,`Hey ${fn}, thanks for this. `];
+  if(tone.vibe==='pro')return pick(pro,m.id);if(tone.vibe==='sweet')return pick(warm,m.id);return pick(casual,m.id);}
+function applyEmoji(text,m){
+  // strip any emojis from the generated body so the tone sheet's list is the single source of truth
+  let base=text.replace(EMOJI_RE,'').replace(/\s+([.!?,])/g,'$1').replace(/\s{2,}/g,' ').trim();
+  const list=parseEmojis(tone.emojis);
+  if(!list.length)return base;                                   // no emojis listed → clean text
+  if(m.intent==='troll')return base;                             // never on negative replies
+  if(m.intent==='question'&&m.id%2)return base;                  // sparse on questions
+  let out=base+' '+list[m.id%list.length];
+  if(m.intent==='support'&&list.length>1)out+=' '+list[(m.id+1)%list.length];
+  return out;}
+function signature(){return tone.signoff&&tone.signoff.trim()?'\n\n'+tone.signoff.trim():'';}
+function injectPhrase(text,m){const p=tone.phrases.split(/[\n,]/).map(s=>s.trim()).filter(Boolean);if(!p.length)return text;if(m.id%2===0)return text+' — '+pick(p,m.id);return text;}
+function generateDraft(m){let g=greetingFor(m),b=pick(bodyFor(m),m.id);b=injectPhrase(b,m);let full=g+b;if(tone.vibe==='pro')full=full.charAt(0).toUpperCase()+full.slice(1);full=applyEmoji(full,m);full=full+signature();return full.trim();}
+
+/* ============ STATE ============ */
+let state={view:'inbox',channel:'all',typeFilter:'all',search:'',selected:null,drafts:{},sent:{},gran:'week',fanSort:'all',connections:{}};
+MESSAGES.forEach(m=>{state.drafts[m.id]=generateDraft(m);});
+
+/* ============ ANALYTICS DATA (deterministic mock) ============ */
+function seeded(seed){let s=seed%2147483647;if(s<=0)s+=2147483646;return()=>{s=s*16807%2147483647;return (s-1)/2147483646;};}
+// build ~180 days of per-channel daily counts with an upward growth trend + weekly seasonality
+const DAY_MS=86400000;
+const today=new Date(); today.setHours(0,0,0,0);
+const HIST=[]; // [{date, counts:{chId:n}, total}]
+(function buildHistory(){
+  const rnd=seeded(97);
+  const chBase={'ig-dm':6,'ig-cmt':11,'yt-cmt':9,'tt-cmt':14,'tt-dm':5,'snap-cmt':7,'fb-cmt':4,'fb-msgr':3,'discord':8,'email':2,'sms':3};
+  for(let i=179;i>=0;i--){
+    const date=new Date(today.getTime()-i*DAY_MS);
+    const dow=date.getDay();
+    const weekendBoost=(dow===0||dow===6)?1.25:1;
+    const daysAgo=i;
+    const growth=Math.pow(1.0022,(180-daysAgo)); // ~compounding growth toward today
+    const counts={};let total=0;
+    CHANNELS.forEach(c=>{
+      const base=chBase[c.id]||4;
+      const noise=0.7+rnd()*0.7;
+      let n=Math.round(base*growth*weekendBoost*noise);
+      counts[c.id]=n;total+=n;
+    });
+    HIST.push({date,counts,total});
+  }
+})();
+
+function fmtInt(n){return n.toLocaleString('en-US');}
+function ymd(d){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+
+// Build display buckets for a granularity. Returns {buckets:[{label,total,counts,sub}], windowTotal, counts}
+function buildBuckets(gran){
+  if(gran==='day'){
+    // exclude today (partial) → last 14 complete days
+    const days=HIST.slice(0,-1).slice(-14);
+    return days.map(d=>({label:(d.date.getMonth()+1)+'/'+d.date.getDate(),total:d.total,counts:d.counts,
+      full:d.date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}));
+  }
+  if(gran==='week'){
+    // group into weeks (Mon start); keep only complete 7-day weeks, last 12
+    const weeks=[];let cur=null;
+    HIST.forEach(d=>{
+      const dow=(d.date.getDay()+6)%7; // Mon=0
+      if(dow===0||!cur){ if(cur)weeks.push(cur); cur={start:new Date(d.date),total:0,counts:{},days:0}; }
+      cur.total+=d.total;cur.days++;CHANNELS.forEach(c=>cur.counts[c.id]=(cur.counts[c.id]||0)+d.counts[c.id]);
+    });
+    if(cur)weeks.push(cur);
+    return weeks.filter(w=>w.days===7).slice(-12).map(w=>({label:(w.start.getMonth()+1)+'/'+w.start.getDate(),total:w.total,counts:w.counts,
+      full:'Week of '+w.start.toLocaleDateString('en-US',{month:'short',day:'numeric'})}));
+  }
+  // month — keep only complete months, last 6
+  const months={};const order=[];
+  HIST.forEach(d=>{const k=d.date.getFullYear()+'-'+d.date.getMonth();if(!months[k]){months[k]={d:new Date(d.date.getFullYear(),d.date.getMonth(),1),total:0,counts:{},days:0};order.push(k);}months[k].total+=d.total;months[k].days++;CHANNELS.forEach(c=>months[k].counts[c.id]=(months[k].counts[c.id]||0)+d.counts[c.id]);});
+  const complete=order.filter(k=>{const m=months[k];const dim=new Date(m.d.getFullYear(),m.d.getMonth()+1,0).getDate();return m.days===dim;});
+  return complete.slice(-6).map(k=>({label:months[k].d.toLocaleDateString('en-US',{month:'short'}),total:months[k].total,counts:months[k].counts,
+    full:months[k].d.toLocaleDateString('en-US',{month:'long',year:'numeric'})}));
+}
+
+/* ============ SIDEBAR ============ */
+function pendingForChannel(id){return MESSAGES.filter(m=>m.ch===id&&!state.sent[m.id]).length;}
+function renderChannels(){
+  const wrap=document.getElementById('channels');let html='';
+  const totalPending=MESSAGES.filter(m=>!state.sent[m.id]).length;
+  html+=chanRow({id:'all',name:'All Messages'},totalPending,state.channel==='all');
+  CHANNELS.forEach(c=>{html+=chanRow(c,pendingForChannel(c.id),state.channel===c.id);});
+  wrap.innerHTML=html;
+}
+function chanRow(c,count,active){
+  const ico=c.id==='all'
+    ?`<span class="ico" style="background:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>`
+    :`<span class="ico" style="background:${c.bg}">${colorGlyph(c)}</span>`;
+  return `<button class="chan ${active?'active':''}" onclick="setChannel('${c.id}')">${ico}<span class="nm">${c.name}</span>${count>0?`<span class="badge">${count}</span>`:''}</button>`;
+}
+
+/* ============ INBOX LIST ============ */
+function visibleMessages(){
+  return MESSAGES.filter(m=>{
+    if(state.channel!=='all'&&m.ch!==state.channel)return false;
+    const ch=CH[m.ch];
+    if(state.typeFilter==='dm'&&ch.type!=='dm')return false;
+    if(state.typeFilter==='comment'&&ch.type!=='comment')return false;
+    if(state.typeFilter==='unread'&&state.sent[m.id])return false;
+    if(state.typeFilter==='sent'&&!state.sent[m.id])return false;
+    if(state.search){const q=state.search.toLowerCase();if(!(m.name+m.handle+m.text).toLowerCase().includes(q))return false;}
+    return true;
+  });
+}
+function initials(n){const p=n.replace(/[^A-Za-z ].*$/,'').trim().split(/\s+/);return ((p[0]?.[0]||'')+(p[1]?.[0]||'')).toUpperCase()||n.slice(0,2).toUpperCase();}
+function avatarColor(n){const cols=['#6d5cff','#e1306c','#12b76a','#eb6834','#1877f2','#eda100','#5865f2','#e34948','#00a3a3'];let s=0;for(const c of n)s+=c.charCodeAt(0);return cols[s%cols.length];}
+
+function render(){
+  state.search=document.getElementById('search').value.trim();
+  renderChannels();
+  const list=document.getElementById('list');
+  const msgs=visibleMessages();
+  const title=state.channel==='all'?'All Messages':CH[state.channel].name;
+  document.getElementById('topTitle').textContent=title;
+  const pending=msgs.filter(m=>!state.sent[m.id]).length;
+  const sentToday=MESSAGES.filter(m=>state.sent[m.id]).length;
+  document.getElementById('topSub').textContent=pending+' waiting · '+sentToday+' sent today';
+  document.getElementById('filterCount').textContent=msgs.length+' shown';
+
+  if(!msgs.length){
+    list.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 6L9 17l-5-5"/></svg><div><b>All caught up</b><br/>Nothing here right now.</div></div>`;
+    document.getElementById('detail').innerHTML=detailEmpty();return;
+  }
+  list.innerHTML=msgs.map(itemRow).join('');
+  if(!state.selected||!msgs.find(m=>m.id===state.selected))state.selected=msgs[0].id;
+  renderDetail();
+  [...document.querySelectorAll('.item')].forEach(el=>el.classList.toggle('active',+el.dataset.id===state.selected));
+}
+function itemRow(m){
+  const ch=CH[m.ch],sent=state.sent[m.id];
+  return `<div class="item ${sent?'done':'todo'}" data-id="${m.id}" onclick="selectMsg(${m.id})">
+    <div class="thumb"><div class="av" style="background:${avatarColor(m.name)}">${initials(m.name)}</div>
+      <div class="pf" style="background:${ch.bg}">${colorGlyph(ch)}</div></div>
+    <div class="it-body">
+      <div class="it-top"><span class="it-name">${escapeHtml(m.name)}</span><span class="it-handle">${escapeHtml(m.handle)}</span><span class="it-time">${m.time}</span></div>
+      <div class="it-msg">${escapeHtml(m.text)}</div>
+    </div>
+    ${sent
+      ?'<span class="it-sent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Sent</span>'
+      :'<span class="it-unread"></span>'}
+  </div>`;
+}
+
+/* ============ DETAIL ============ */
+function detailEmpty(){return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><div>Select a message to see its draft</div></div>`;}
+function renderDetail(){
+  const d=document.getElementById('detail');
+  const m=MESSAGES.find(x=>x.id===state.selected);
+  if(!m){d.innerHTML=detailEmpty();return;}
+  const ch=CH[m.ch],sent=state.sent[m.id],draft=state.drafts[m.id]||'';
+  d.innerHTML=`
+    <div class="d-head">
+      <div class="av" style="background:${avatarColor(m.name)}">${initials(m.name)}</div>
+      <div class="meta"><h3>${escapeHtml(m.name)}</h3>
+        <div class="chn"><span class="ico" style="background:${ch.bg}">${colorGlyph(ch)}</span>${ch.name} · ${ch.type==='dm'?'Direct message':'Comment'} · ${m.time} ago</div></div>
+      <div class="kbd-hint"><span class="kbd">↑</span><span class="kbd">↓</span> to move</div>
+    </div>
+    <div class="conv"><div class="bubble-in">${escapeHtml(m.text)}<div class="m-meta">${escapeHtml(m.handle)} · ${m.time} ago</div></div></div>
+    <div class="composer">
+      <div class="c-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg>Suggested reply<span class="pill">${tone.samples?'in your voice':'default tone'}</span></div>
+      ${sent
+        ? `<div class="draft-box" style="opacity:.7">${escapeHtml(draft)}</div>
+           <div class="c-actions"><span style="color:var(--good);font-weight:600;font-size:12.5px;display:flex;align-items:center;gap:6px"><svg style="width:15px;height:15px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Sent to ${escapeHtml(firstName(m.name))}</span><div class="spacer"></div><button class="btn ghost sm" onclick="unsend(${m.id})">Undo</button></div>`
+        : `<textarea class="draft-box" id="draft-${m.id}" oninput="onDraftEdit(${m.id})">${escapeHtml(draft)}</textarea>
+           <div class="c-actions">
+             <div class="act"><button class="btn good" onclick="approve(${m.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Approve &amp; send</button><span class="sc"><b>⌥ + return</b></span></div>
+             <div class="act"><button class="btn learn" onclick="approveAndLearn(${m.id})" title="Send this reply and save it to your tone sheet, so future drafts learn from the ones you like"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-4-7 4V5a2 2 0 012-2h10a2 2 0 012 2z"/><path d="M9 9l2 2 4-4"/></svg>Approve + save to tone</button><span class="sc"><b>⌥ + shift + return</b></span></div>
+             <div class="act"><button class="btn sm" onclick="regenerateOne(${m.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg>Rewrite</button><span class="sc"><b>⌥ + R</b></span></div>
+             <button class="btn ghost sm" onclick="skip(${m.id})">Skip</button>
+             <div class="spacer"></div><span class="mini" id="chars-${m.id}">${draft.length}</span>
+           </div>`}
+    </div>`;
+}
+
+/* ============ ACTIONS ============ */
+function selectMsg(id){state.selected=id;document.getElementById('inbox').classList.add('show-detail');render();scrollActiveIntoView();}
+function onDraftEdit(id){const el=document.getElementById('draft-'+id);state.drafts[id]=el.value;const c=document.getElementById('chars-'+id);if(c)c.textContent=el.value.length;}
+function approve(id){const el=document.getElementById('draft-'+id);if(el)state.drafts[id]=el.value;state.sent[id]=true;const m=MESSAGES.find(x=>x.id===id);toast(`Reply sent to ${firstName(m.name)} on ${CH[m.ch].name}`);const msgs=visibleMessages();const next=msgs.find(x=>!state.sent[x.id]);if(next)state.selected=next.id;render();}
+function approveAndLearn(id){const el=document.getElementById('draft-'+id);const text=el?el.value:(state.drafts[id]||'');state.drafts[id]=text;appendToneSample(text);state.sent[id]=true;const m=MESSAGES.find(x=>x.id===id);toast(`Sent + saved to your tone sheet ✓`);const msgs=visibleMessages();const next=msgs.find(x=>!state.sent[x.id]);if(next)state.selected=next.id;render();}
+function appendToneSample(text){const clean='"'+String(text||'').replace(/\s*\n+\s*/g,' ').trim()+'"';if(!clean||clean==='""')return;tone.samples=(tone.samples&&tone.samples.trim())?tone.samples.trim()+'\n'+clean:clean;}
+function unsend(id){state.sent[id]=false;render();toast('Moved back to your queue');}
+function skip(id){const msgs=visibleMessages();const i=msgs.findIndex(x=>x.id===id);const next=msgs[i+1]||msgs.find(x=>!state.sent[x.id]);if(next)state.selected=next.id;render();scrollActiveIntoView();}
+function regenerateOne(id){const m=MESSAGES.find(x=>x.id===id);m._seed=(m._seed||0)+1;state.drafts[id]=generateDraft({...m,id:m.id+m._seed*100});render();toast('Rewrote that one');}
+function regenerateAll(){MESSAGES.forEach(m=>{if(!state.sent[m.id])state.drafts[m.id]=generateDraft(m);});render();toast('Regenerated every draft');}
+function approveAll(){const msgs=visibleMessages().filter(m=>!state.sent[m.id]);if(!msgs.length){toast('Nothing left to send here');return;}msgs.forEach(m=>state.sent[m.id]=true);render();toast(`Sent ${msgs.length} ${msgs.length===1?'reply':'replies'}`);}
+
+/* incoming messages that arrive when you hit Refresh (mock of new fan activity) */
+const RESERVE=[
+  {ch:'ig-dm',name:'Bella',handle:'@bella.creates',text:"just found your page today and binged everything 🫶 you're my new favorite creator fr",intent:'compliment',topic:'finding your page'},
+  {ch:'tt-cmt',name:'zanek',handle:'@zane.k',text:"the pacing on this edit is insane, how long did this take you??",intent:'question',topic:'how long the edit took'},
+  {ch:'email',name:'Nova Studios',handle:'hello@novastudios.io',text:"We'd love to gift you our new mic and discuss a paid review. Are you open to audio gear collabs?",intent:'collab',topic:'an audio gear collab'},
+  {ch:'yt-cmt',name:'migueldraws',handle:'migueldraws',text:"came back to rewatch this for the 5th time lol it just hits different",intent:'compliment',topic:'rewatching it'},
+  {ch:'discord',name:'pixel',handle:'pixel#3310',text:"are you doing the live Q&A this weekend? don't wanna miss it 👀",intent:'question',topic:'the live Q&A'},
+  {ch:'sms',name:'Sky (fan line)',handle:'+1 (415) 555-0173',text:"your video literally convinced me to start my own channel. thank you 🙏",intent:'support',topic:'starting their own channel'},
+];
+function refreshMessages(){
+  const btn=document.getElementById('refreshBtn');if(btn)btn.classList.add('spin');
+  setTimeout(()=>{if(btn)btn.classList.remove('spin');},600);
+  if(!RESERVE.length){toast('No new messages — you’re all caught up ✓');return;}
+  const n=Math.min(2,RESERVE.length);
+  const incoming=RESERVE.splice(0,n);
+  incoming.forEach(r=>{r.id=idc++;r.time='just now';MESSAGES.unshift(r);state.drafts[r.id]=generateDraft(r);});
+  if(state.view!=='inbox')setView('inbox'); else render();
+  toast(`${n} new message${n>1?'s':''} came in`);
+}
+
+function setChannel(id){state.channel=id;state.selected=null;render();}
+function setTypeFilter(f){state.typeFilter=f;document.querySelectorAll('.filters .chip').forEach(c=>c.classList.toggle('active',c.dataset.f===f));render();}
+
+function setView(v){
+  state.view=v;
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
+  const isInbox=v==='inbox';
+  document.getElementById('inbox').classList.toggle('hidden',!isInbox);
+  document.getElementById('filters').classList.toggle('hidden',!isInbox);
+  document.getElementById('analyticsPage').classList.toggle('hidden',v!=='analytics');
+  document.getElementById('tonePage').classList.toggle('hidden',v!=='tone');
+  document.getElementById('fansPage').classList.toggle('hidden',v!=='fans');
+  document.getElementById('connectPage').classList.toggle('hidden',v!=='connect');
+  document.getElementById('searchWrap').style.visibility=isInbox?'visible':'hidden';
+  document.getElementById('regenAllBtn').style.display=isInbox?'':'none';
+  document.getElementById('approveAllBtn').style.display=isInbox?'':'none';
+  if(v==='inbox'){render();}
+  else if(v==='analytics'){document.getElementById('topTitle').textContent='Analytics';document.getElementById('topSub').textContent='Message volume & growth';renderAnalytics();}
+  else if(v==='fans'){document.getElementById('topTitle').textContent='Fans';document.getElementById('topSub').textContent='Your most engaged people';renderFans();}
+  else if(v==='connect'){document.getElementById('topTitle').textContent='Connections';document.getElementById('topSub').textContent='Link your platforms';renderConnect();}
+  else{document.getElementById('topTitle').textContent='Tone Sheet';document.getElementById('topSub').textContent='Teach the portal how you talk';renderTone();}
+}
+
+/* ============ KEYBOARD NAV ============ */
+function scrollActiveIntoView(){const el=document.querySelector('.item.active');if(el)el.scrollIntoView({block:'nearest'});}
+// composer shortcuts — fire even while typing in the draft box
+document.addEventListener('keydown',e=>{
+  if(state.view!=='inbox'||!e.altKey)return;
+  const m=MESSAGES.find(x=>x.id===state.selected);
+  if(!m||state.sent[m.id])return;
+  if(e.code==='Enter'){e.preventDefault(); e.shiftKey?approveAndLearn(m.id):approve(m.id);}
+  else if(e.code==='KeyR'){e.preventDefault(); regenerateOne(m.id);}
+});
+document.addEventListener('keydown',e=>{
+  if(state.view!=='inbox')return;
+  const tag=(document.activeElement&&document.activeElement.tagName)||'';
+  if(tag==='TEXTAREA'||tag==='INPUT')return;
+  if(e.key!=='ArrowDown'&&e.key!=='ArrowUp'&&e.key!=='j'&&e.key!=='k')return;
+  const msgs=visibleMessages();if(!msgs.length)return;
+  let i=msgs.findIndex(m=>m.id===state.selected);if(i<0)i=0;
+  if(e.key==='ArrowDown'||e.key==='j')i=Math.min(msgs.length-1,i+1);
+  else i=Math.max(0,i-1);
+  e.preventDefault();
+  state.selected=msgs[i].id;
+  document.getElementById('inbox').classList.add('show-detail');
+  render();scrollActiveIntoView();
+});
+
+/* ============ ANALYTICS RENDER ============ */
+function renderAnalytics(){
+  const p=document.getElementById('analyticsPage');
+  const gran=state.gran;
+  const buckets=buildBuckets(gran);
+  const windowTotal=buckets.reduce((a,b)=>a+b.total,0);
+  // period-over-period: compare recent half vs previous half of shown buckets
+  const half=Math.floor(buckets.length/2);
+  const recent=buckets.slice(-half).reduce((a,b)=>a+b.total,0);
+  const prior=buckets.slice(0,buckets.length-half).slice(-half).reduce((a,b)=>a+b.total,0);
+  const delta=prior?((recent-prior)/prior*100):0;
+  const perLabel={day:'day',week:'week',month:'month'}[gran];
+  const windowLabel='last '+buckets.length+' '+perLabel+'s';
+  const avg=Math.round(windowTotal/buckets.length);
+  // busiest platform over window
+  const pf={};CHANNELS.forEach(c=>pf[c.id]=0);buckets.forEach(b=>CHANNELS.forEach(c=>pf[c.id]+=b.counts[c.id]||0));
+  const pfSorted=CHANNELS.map(c=>({c,n:pf[c.id]})).sort((a,b)=>b.n-a.n);
+  const top=pfSorted[0];const pfMax=pfSorted[0].n||1;
+  const max=Math.max(...buckets.map(b=>b.total),1);
+
+  p.innerHTML=`<div class="wrap">
+    <div class="page-head"><h2>Analytics</h2><p>How many fan messages you're getting across every platform — and whether that's growing. Switch between day, week, and month to compare periods and spot the trend.</p></div>
+
+    <div class="a-controls">
+      <div class="seg">
+        ${['day','week','month'].map(g=>`<button class="${gran===g?'active':''}" onclick="setGran('${g}')">By ${g}</button>`).join('')}
+      </div>
+      <div class="spacer"></div>
+      <span style="font-size:12px;color:var(--txt-3)">Showing ${windowLabel}</span>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="l">Total fan messages</div><div class="n">${fmtInt(windowTotal)}</div><div class="sub">${windowLabel}</div></div>
+      <div class="kpi"><div class="l">vs previous period</div><div class="n">${delta>=0?'+':''}${delta.toFixed(1)}%</div>
+        <div class="d ${delta>=0?'up':'down'}">${arrow(delta)} ${fmtInt(recent)} vs ${fmtInt(prior)}</div></div>
+      <div class="kpi"><div class="l">Average per ${perLabel}</div><div class="n">${fmtInt(avg)}</div><div class="sub">across the window</div></div>
+      <div class="kpi"><div class="l">Busiest platform</div><div class="n" style="font-size:18px;margin-top:10px;display:flex;align-items:center;gap:8px"><span class="ico" style="width:24px;height:24px;border-radius:7px;display:grid;place-items:center;background:${top.c.bg}">${colorGlyph(top.c)}</span>${top.c.name.replace(' Comments','').replace(' Messenger',' Msgr')}</div><div class="sub">${fmtInt(top.n)} messages</div></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="ch-head"><h4>Messages per ${perLabel}</h4><span class="ch-sub">hover a bar for the change vs the ${perLabel} before</span></div>
+      <div class="bars">
+        ${buckets.map((b,i)=>{
+          const h=Math.round(b.total/max*100);
+          const prev=i>0?buckets[i-1].total:null;
+          const chg=prev?((b.total-prev)/prev*100):null;
+          const isLast=i===buckets.length-1;
+          return `<div class="bar-col">
+            <div class="bar-tip"><b>${fmtInt(b.total)}</b><br/>${b.full}${chg!==null?`<br/><span class="t-d ${chg>=0?'up':'down'}">${chg>=0?'▲':'▼'} ${Math.abs(chg).toFixed(0)}% vs prev</span>`:''}</div>
+            <div class="bar ${isLast?'':''}" style="height:${h}%;${isLast?'':'opacity:.9'}"></div>
+            <div class="bar-x">${b.label}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="ch-head"><h4>By platform</h4><span class="ch-sub">${windowLabel} · ${fmtInt(windowTotal)} total</span></div>
+      <div class="platform-list">
+        ${pfSorted.map(({c,n})=>`<div class="pf-row">
+          <span class="ico" style="background:${c.bg}">${colorGlyph(c)}</span>
+          <span class="pf-name">${c.name}</span>
+          <span class="pf-track"><span class="pf-fill" style="width:${Math.round(n/pfMax*100)}%"></span></span>
+          <span class="pf-val"><b>${fmtInt(n)}</b> <span>${(n/windowTotal*100).toFixed(0)}%</span></span>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+function arrow(v){return v>=0
+  ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M9 7h8v8"/></svg>'
+  :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 7l10 10M15 17H7V9"/></svg>';}
+function setGran(g){state.gran=g;renderAnalytics();}
+
+/* ============ FANS ============ */
+const FANS=[
+  {name:'sofiaaa',handle:'@sofiaaa.k',ch:'tt-dm',dms:142,comments:88},
+  {name:'devon.makes',handle:'@devon.makes',ch:'ig-cmt',dms:24,comments:181},
+  {name:'ghostbyte',handle:'ghostbyte#0042',ch:'discord',dms:118,comments:73},
+  {name:'Maya Rivera',handle:'@mayarivera',ch:'ig-dm',dms:131,comments:41},
+  {name:'kaii',handle:'@kaii_j',ch:'snap-cmt',dms:12,comments:149},
+  {name:'jenna',handle:'@jenna.rose',ch:'tt-cmt',dms:8,comments:138},
+  {name:'Jordan_TV',handle:'Jordan_TV',ch:'yt-cmt',dms:0,comments:127},
+  {name:'Theo',handle:'@theo.shoots',ch:'ig-dm',dms:96,comments:22},
+  {name:'mateo',handle:'@mateo.g',ch:'snap-cmt',dms:5,comments:103},
+  {name:'nova',handle:'nova#7781',ch:'discord',dms:71,comments:20},
+  {name:'Riley',handle:'+1 (773) 555-0199',ch:'sms',dms:79,comments:0},
+  {name:'Marcus Bell',handle:'Marcus Bell',ch:'fb-cmt',dms:6,comments:64},
+  {name:'Alex',handle:'+1 (312) 555-0148',ch:'sms',dms:58,comments:0},
+  {name:'Linda Carter',handle:'Linda Carter',ch:'fb-msgr',dms:47,comments:5},
+  {name:'lil.bee',handle:'@lil.bee',ch:'tt-cmt',dms:3,comments:52},
+];
+function metricOf(f,sort){return sort==='dms'?f.dms:sort==='comments'?f.comments:(f.dms+f.comments);}
+function handleUser(h){return String(h||'').replace(/^@/,'').trim();}
+function platformShort(ch){return {'ig-dm':'Instagram','ig-cmt':'Instagram','yt-cmt':'YouTube','tt-cmt':'TikTok','tt-dm':'TikTok','snap-cmt':'Snapchat','fb-cmt':'Facebook','fb-msgr':'Messenger','discord':'Discord','email':'email','sms':'text'}[ch]||CH[ch].name;}
+function fanProfileUrl(ch,handle,name){
+  const u=handleUser(handle);
+  switch(ch){
+    case 'ig-dm': case 'ig-cmt': return 'https://instagram.com/'+u;
+    case 'yt-cmt': return 'https://youtube.com/@'+u;
+    case 'tt-cmt': case 'tt-dm': return 'https://tiktok.com/@'+u;
+    case 'snap-cmt': return 'https://snapchat.com/add/'+u;
+    case 'fb-cmt': case 'fb-msgr': return 'https://www.facebook.com/search/top?q='+encodeURIComponent(name);
+    case 'email': return 'mailto:'+u;
+    case 'sms': return 'tel:'+u.replace(/[^\d+]/g,'');
+    case 'discord': return null; // Discord has no public web profile
+    default: return null;
+  }
+}
+function openFan(ch,handle,name){
+  const url=fanProfileUrl(ch,handle,name);
+  if(!url){toast(`Discord has no public web profile — search “${handle}” in your Discord app`);return;}
+  window.open(url,'_blank','noopener');
+  toast(`Opening ${name} on ${platformShort(ch)}…`);
+}
+function jsAttr(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+function renderFans(){
+  const p=document.getElementById('fansPage');
+  const sort=state.fanSort;
+  const ranked=FANS.map(f=>({...f,total:f.dms+f.comments,val:metricOf(f,sort)})).sort((a,b)=>b.val-a.val);
+  const max=ranked[0].val||1;
+  const totalAll=FANS.reduce((a,f)=>a+f.dms+f.comments,0);
+  const top=ranked[0];
+  const metricWord={all:'total messages',dms:'DMs',comments:'comments'}[sort];
+  p.innerHTML=`<div class="wrap">
+    <div class="page-head"><h2>Top Fans</h2><p>Your most engaged people, ranked by how much they interact with you across every platform. Switch between total messages, DMs, and comments to see who's showing up the most — and click any fan to open their profile on that platform.</p></div>
+
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+      <div class="kpi"><div class="l">Fans tracked</div><div class="n">${fmtInt(FANS.length)}</div><div class="sub">people who've reached out</div></div>
+      <div class="kpi"><div class="l">Total interactions</div><div class="n">${fmtInt(totalAll)}</div><div class="sub">DMs + comments, all time</div></div>
+      <div class="kpi"><div class="l">Your #1 fan</div><div class="n" style="font-size:18px;margin-top:10px;display:flex;align-items:center;gap:8px"><span class="ico" style="width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:${CH[top.ch].bg}">${colorGlyph(CH[top.ch])}</span>${escapeHtml(top.name)}</div><div class="sub">${fmtInt(top.total)} interactions</div></div>
+    </div>
+
+    <div class="fan-controls">
+      <div class="seg">${[['all','Total'],['dms','DMs'],['comments','Comments']].map(([k,l])=>`<button class="${sort===k?'active':''}" onclick="setFanSort('${k}')">${l}</button>`).join('')}</div>
+      <div class="spacer"></div><span style="font-size:12px;color:var(--txt-3)">Ranked by ${metricWord}</span>
+    </div>
+
+    <div class="card">
+      ${ranked.map((f,i)=>{
+        const ch=CH[f.ch];const w=Math.round(f.val/max*100);
+        return `<div class="fan-row clickable" onclick="openFan('${f.ch}','${jsAttr(f.handle)}','${jsAttr(f.name)}')" title="Open ${escapeHtml(f.name)} on ${platformShort(f.ch)}">
+          <span class="fan-rank ${i<3?('g'+(i+1)):''}">${i+1}</span>
+          <span class="fan-av" style="background:${avatarColor(f.name)}">${initials(f.name)}<span class="pf" style="background:${ch.bg}">${colorGlyph(ch)}</span></span>
+          <span class="fan-id"><div class="nm">${escapeHtml(f.name)}</div><div class="hd">${escapeHtml(f.handle)}</div></span>
+          <span class="pf-track"><span class="pf-fill" style="width:${w}%"></span></span>
+          <span class="fan-count"><b>${fmtInt(f.val)}</b> <span>${sort==='all'?`(${fmtInt(f.dms)} DMs · ${fmtInt(f.comments)} cmts)`:metricWord}</span></span>
+          <span class="fan-open" title="Open on ${platformShort(f.ch)}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg></span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+function setFanSort(s){state.fanSort=s;renderFans();}
+
+/* ============ CONNECTIONS ============ */
+// availability: ok = works today · warn = works but needs a business account / limited access · none = no API exists
+const CONNECTORS=[
+  {id:'email',   name:'Email',     glyph:'mail',      bg:'#34b7f1', avail:'ok',   status:'Available now',
+    cap:'Read and reply to fan emails. Connect any Gmail or Outlook inbox in a couple of clicks.'},
+  {id:'youtube', name:'YouTube',   glyph:'youtube',   bg:'#ff0000', avail:'ok',   status:'Available now',
+    cap:'Read and reply to comments on your videos through the official YouTube Data API.'},
+  {id:'sms',     name:'SMS / Text',glyph:'sms',       bg:'#12b76a', avail:'ok',   status:'Available now',
+    cap:'A dedicated fan text number (via Twilio). Fans text it; you reply from here.'},
+  {id:'discord', name:'Discord',   glyph:'discord',   bg:'#5865f2', avail:'ok',   status:'Available now',
+    cap:'Messages in your server and DMs sent to your bot, through an official Discord bot.'},
+  {id:'instagram',name:'Instagram',glyph:'instagram', bg:'linear-gradient(135deg,#feda75,#d62976,#962fbf)', avail:'warn', status:'Business account',
+    cap:'DMs and comments — requires an Instagram Professional/Creator account linked to a Facebook Page, plus Meta app review. A 24-hour reply window applies.'},
+  {id:'facebook',name:'Facebook',  glyph:'facebook',  bg:'#1877f2', avail:'warn', status:'Business account',
+    cap:'Page comments and Messenger — works for Facebook Pages (not personal profiles) after Meta app review.'},
+  {id:'tiktok',  name:'TikTok',    glyph:'tiktok',    bg:'#010101', fg:'#00f2ea', avail:'warn', status:'Limited',
+    cap:'Comment reading/moderation only, via TikTok’s approved developer program (access is restricted). TikTok has no API for DMs.'},
+  {id:'snapchat',name:'Snapchat',  glyph:'snapchat',  bg:'#fffc00', fg:'#000', avail:'none', status:'No API',
+    cap:'Snapchat does not offer a public API to read or send messages or comments, so it can’t be automated into a portal like this.'},
+];
+function connGlyph(c){let g=ICON[c.glyph];if(c.fg&&c.fg!=='#fff')g=g.replace(/#fff/g,c.fg).replace(/#000/g,c.fg);return g;}
+function renderConnect(){
+  const p=document.getElementById('connectPage');
+  const connectable=CONNECTORS.filter(c=>c.avail!=='none');
+  const done=connectable.filter(c=>state.connections[c.id]).length;
+  const pct=Math.round(done/connectable.length*100);
+  p.innerHTML=`<div class="wrap">
+    <div class="page-head"><h2>Connect your accounts</h2><p>Sign in to each platform once and its messages flow into your inbox. You’re signed in as <b>${escapeHtml('samnicholson2@gmail.com')}</b>. Availability differs by platform — the labels below are honest about what each one actually allows.</p></div>
+
+    <div class="conn-progress">
+      <span class="lbl">${done} of ${connectable.length} connected</span>
+      <span class="bar"><span style="width:${pct}%"></span></span>
+    </div>
+
+    <div class="conn-grid">
+      ${CONNECTORS.map(c=>{
+        const on=state.connections[c.id];
+        const tagClass=c.avail==='ok'?'ok':c.avail==='warn'?'warn':'none';
+        let action;
+        if(c.avail==='none') action=`<button class="conn-btn disabled" disabled>Not available</button>`;
+        else if(on) action=`<div style="text-align:right"><button class="conn-btn connected"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Connected</button><br/><button class="conn-dis" onclick="disconnect('${c.id}')">Disconnect</button></div>`;
+        else action=`<button class="conn-btn" onclick="connect('${c.id}','${escapeHtml(c.name)}')">Connect</button>`;
+        return `<div class="conn-row">
+          <span class="conn-ico" style="background:${c.bg}">${connGlyph(c)}</span>
+          <div class="conn-main">
+            <div class="nm">${c.name} <span class="tag ${tagClass}">${c.status}</span></div>
+            <div class="cap">${c.cap}</div>
+          </div>
+          <div class="conn-action">${action}</div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <div class="conn-note">
+      <b>A note on what’s live:</b> the platforms marked <b>Available now</b> can be wired up with standard sign-in.
+      The <b>Business account</b> ones (Instagram, Facebook) need a Creator/Business account and an approval review from Meta before they can go live.
+      <b>TikTok</b> only exposes limited comment access and no DM access, and <b>Snapchat</b> has no public messaging API at all — those limits are set by the platforms, not by this portal.
+    </div>
+  </div>`;
+}
+function connect(id,name){
+  toast(`Redirecting to ${name} to authorize…`);
+  setTimeout(()=>{state.connections[id]=true;renderConnect();toast(`${name} connected ✓`);},700);
+}
+function disconnect(id){state.connections[id]=false;renderConnect();toast('Disconnected');}
+
+/* ============ TONE RENDER ============ */
+function renderTone(){
+  const p=document.getElementById('tonePage');
+  p.innerHTML=`<div class="wrap">
+    <div class="page-head"><h2>Your Tone Sheet</h2><p>Paste in how you actually talk — real DMs, captions, comment replies. The portal studies this and writes every suggested reply in your voice, so all you do is glance and approve. Nothing here is required, but the more you add, the more it sounds like you.</p></div>
+    <div class="stack">
+      <div class="card">
+        <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H5.2L4 17.2z"/></svg>Writing &amp; comment samples</h4>
+        <p class="hint">Drop in things you've actually written — replies to fans, captions, texts. One per line is perfect.</p>
+        <textarea class="field" id="t-samples" placeholder="“omg thank you sm this literally made my day 🥹”
+“appreciate you always, means the world fr”
+“haha you already know part 2 is comin 🔥”" oninput="tone.samples=this.value">${escapeHtml(tone.samples)}</textarea>
+      </div>
+      <div class="row2">
+        <div class="card">
+          <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg>Words &amp; phrases you always use</h4>
+          <p class="hint">Signature lines or slang. One per line or comma separated.</p>
+          <textarea class="field" id="t-phrases" placeholder="means the world&#10;you already know&#10;stay tuned 👀" oninput="tone.phrases=this.value">${escapeHtml(tone.phrases)}</textarea>
+        </div>
+        <div class="card">
+          <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 10h8M8 14h5"/></svg>Sign-off &amp; emojis</h4>
+          <p class="hint">How you end a message (optional).</p>
+          <input class="field" id="t-signoff" placeholder="– love always, Sam 💜" value="${escapeHtml(tone.signoff)}" oninput="tone.signoff=this.value" style="margin-bottom:16px" />
+          <span class="fld-label">Emojis you use</span>
+          <input class="field" id="t-emojis" placeholder="🙌 ✨ 💜 🔥 🥹 😭 🎉" value="${escapeHtml(tone.emojis)}" oninput="tone.emojis=this.value;updateTonePreview()" />
+          <p class="hint" style="margin:9px 0 0">List the emojis you actually use — drafts will only pull from these. Leave blank for no emojis.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>Overall vibe</h4>
+        <p class="hint">Pick the energy that feels most like you.</p>
+        <div class="vibes">${VIBES.map(v=>`<button class="vibe ${tone.vibe===v.id?'active':''}" onclick="tone.vibe='${v.id}';renderTone()">${v.label}</button>`).join('')}</div>
+      </div>
+      <div class="row2">
+        <div class="card"><h4 style="color:var(--good)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--good)" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>Always do</h4><p class="hint">Things you want in every reply.</p><textarea class="field" id="t-dos" placeholder="be genuine, hype people up, keep it short" oninput="tone.dos=this.value">${escapeHtml(tone.dos)}</textarea></div>
+        <div class="card"><h4 style="color:var(--down)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--down)" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>Never do</h4><p class="hint">Things to avoid.</p><textarea class="field" id="t-donts" placeholder="don't sound corporate, no long paragraphs" oninput="tone.donts=this.value">${escapeHtml(tone.donts)}</textarea></div>
+      </div>
+      <div class="card"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>Live preview</h4><p class="hint">How a reply reads with your current settings:</p><div class="preview" id="tonePreview"></div></div>
+    </div>
+    <div class="save-bar"><button class="btn primary" onclick="saveTone()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg>Save &amp; apply to all drafts</button><span class="saved-flag" id="savedFlag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg>Applied to your drafts</span></div>
+  </div>`;
+  updateTonePreview();
+}
+function updateTonePreview(){const el=document.getElementById('tonePreview');if(!el)return;const s=MESSAGES.find(m=>m.intent==='support')||MESSAGES[0];el.innerHTML=`<span class="ph">Fan wrote:</span> “${escapeHtml(s.text)}”\n\n<b>Your reply →</b> ${escapeHtml(generateDraft(s))}`;}
+document.addEventListener('input',e=>{if(['t-samples','t-phrases','t-signoff','t-emojis','t-dos','t-donts'].includes(e.target.id))updateTonePreview();});
+function saveTone(){MESSAGES.forEach(m=>{if(!state.sent[m.id])state.drafts[m.id]=generateDraft(m);});const f=document.getElementById('savedFlag');if(f)f.classList.add('show');toast('Tone saved — drafts rewritten in your voice');}
+
+/* ============ THEME ============ */
+const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/></svg>';
+const MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>';
+function applyThemeIcon(){document.getElementById('themeToggle').innerHTML=document.documentElement.getAttribute('data-theme')==='dark'?SUN:MOON;}
+function toggleTheme(){const cur=document.documentElement.getAttribute('data-theme');document.documentElement.setAttribute('data-theme',cur==='dark'?'light':'dark');applyThemeIcon();}
+
+/* ============ HELPERS ============ */
+function escapeHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toast(msg){const wrap=document.getElementById('toasts');const t=document.createElement('div');t.className='toast';t.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>${escapeHtml(msg)}`;wrap.appendChild(t);setTimeout(()=>{t.style.transition='opacity .3s,transform .3s';t.style.opacity='0';t.style.transform='translateY(8px)';setTimeout(()=>t.remove(),300);},2500);}
+
+/* boot */
+applyThemeIcon();
+renderChannels();
+render();
+
+/* ============================================================
+   LIVE BACKEND INTEGRATION  (added for the real deployed app)
+   Wires the Email channel to your real Gmail via the server API.
+   Everything else stays demo until those platforms are connected.
+   ============================================================ */
+(async function initLive(){
+  let status;
+  try { status = await fetch('/api/status').then(r=>r.json()); }
+  catch(e){ return; } // not served by backend (opened as plain file) → stay in demo mode
+  window.__live = !!status.connected;
+
+  // 1) Make the Email "Connect" button start the real Google sign-in
+  const origConnect = window.connect;
+  window.connect = function(id, name){
+    if(id === 'email'){ window.location.href = '/auth/google'; return; }
+    origConnect(id, name);
+  };
+
+  // Reflect real connection state on the Connections screen
+  if(status.connected){
+    state.connections['email'] = true;
+    if(state.view === 'connect') renderConnect();
+  }
+  // Friendly heads-up if keys aren't in place yet
+  if(!status.hasGoogleKeys){
+    const c = CONNECTORS.find(c=>c.id==='email');
+    if(c) c.cap = 'Add your Google keys in the host settings to enable this (see README). ' + c.cap;
+  }
+
+  // 2) Refresh pulls REAL emails when connected, otherwise keeps demo behavior
+  const origRefresh = window.refreshMessages;
+  window.refreshMessages = async function(){
+    const btn = document.getElementById('refreshBtn');
+    if(btn) btn.classList.add('spin');
+    setTimeout(()=>btn && btn.classList.remove('spin'), 600);
+    if(!window.__live) return origRefresh();
+    try{
+      const emails = await fetch('/api/messages').then(r=>r.json());
+      let added = 0;
+      emails.forEach(e=>{
+        if(MESSAGES.find(x=>x.gid === e.gid)) return; // already have it
+        const nm = { id: idc++, ch:'email', name:e.name, handle:e.handle, text:e.text,
+                     intent:'question', topic:'', time:e.time, live:true, gid:e.gid,
+                     threadId:e.threadId, subject:e.subject };
+        MESSAGES.unshift(nm);
+        state.drafts[nm.id] = e.draft || generateDraft(nm);
+        added++;
+      });
+      if(state.view !== 'inbox') setView('inbox'); else render();
+      toast(added ? `${added} new email${added>1?'s':''} came in` : 'No new emails right now');
+    }catch(err){ toast('Could not reach your inbox'); }
+  };
+
+  // 3) Approving a REAL email actually sends it through Gmail
+  function wrapSend(fn){
+    return async function(id){
+      const m = MESSAGES.find(x=>x.id === id);
+      if(m && m.live){
+        const el = document.getElementById('draft-' + id);
+        const text = el ? el.value : (state.drafts[id] || '');
+        try{
+          const r = await fetch('/api/send', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ gid:m.gid, threadId:m.threadId, to:m.handle, text })
+          });
+          if(!r.ok){ toast('Send failed — check the connection'); return; }
+        }catch(e){ toast('Send failed'); return; }
+      }
+      return fn(id);
+    };
+  }
+  window.approve = wrapSend(window.approve);
+  window.approveAndLearn = wrapSend(window.approveAndLearn);
+
+  // 4) Auto-pull once on load if already connected
+  if(window.__live){ setTimeout(()=>window.refreshMessages(), 400); }
+})();
+</script>
+</body>
+</html>
