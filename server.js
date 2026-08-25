@@ -3,7 +3,7 @@ import express from 'express';
 import session from 'express-session';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { authUrl, exchangeCode, listRecentEmails, sendReply, getProfileEmail } from './lib/google.js';
+import { authUrl, exchangeCode, listRecentEmails, sendReply, getProfileEmail, listRecentComments, replyToComment } from './lib/google.js';
 import { generateDraft } from './lib/ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -74,16 +74,24 @@ app.post('/api/tone', (req, res) => {
 app.get('/api/messages', async (req, res) => {
   if (!store.tokens) return res.json([]);
   try {
-    const emails = await listRecentEmails(store.tokens, 15);
-    // add a draft to each
-    for (const e of emails) {
-      e.draft = await generateDraft(e, store.tone);
+    let items = [];
+    try {
+      const emails = await listRecentEmails(store.tokens, 15);
+      emails.forEach(e => { e.ch = 'email'; });
+      items = items.concat(emails);
+    } catch (e) { console.error('gmail error', e.message); }
+    try {
+      const yt = await listRecentComments(store.tokens, 15);
+      items = items.concat(yt);
+    } catch (e) { console.error('youtube error', e.message); }
+    for (const it of items) {
+      it.draft = await generateDraft(it, store.tone);
     }
-    store.cache = emails;
-    res.json(emails);
+    store.cache = items;
+    res.json(items);
   } catch (e) {
     console.error('list error', e.message);
-    res.status(500).json({ error: 'Could not fetch email. Try reconnecting.' });
+    res.status(500).json({ error: 'Could not fetch messages. Try reconnecting.' });
   }
 });
 
@@ -92,13 +100,17 @@ app.post('/api/send', async (req, res) => {
   const { gid, threadId, to, text } = req.body || {};
   const cached = store.cache.find(m => m.gid === gid) || {};
   try {
-    await sendReply(store.tokens, {
-      to: to || cached.handle,
-      subject: cached.subject,
-      text,
-      threadId: threadId || cached.threadId,
-      inReplyTo: cached.messageId
-    });
+    if (cached.ch === 'yt-cmt') {
+      await replyToComment(store.tokens, cached.ytCommentId, text);
+    } else {
+      await sendReply(store.tokens, {
+        to: to || cached.handle,
+        subject: cached.subject,
+        text,
+        threadId: threadId || cached.threadId,
+        inReplyTo: cached.messageId
+      });
+    }
     res.json({ ok: true });
   } catch (e) {
     console.error('send error', e.message);
