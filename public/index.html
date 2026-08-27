@@ -450,7 +450,36 @@ const MESSAGES=[
 ];
 
 /* ============ TONE ============ */
-let tone={samples:'',phrases:'',signoff:'',vibe:'chill',emojis:'🙌 ✨ 💜 🔥 🥹 🎉',dos:'',donts:''};
+let tone={samples:'',phrases:'',signoff:'',vibe:'chill',emojis:'🙌 ✨ 💜 🔥 🥹 🎉',dos:'',donts:'',shortcuts:''};
+const SHORTCUTS_DEFAULT=`aa = You're awesome!
+aaa = Thank you so much! You're awesome!
+bb = You're the best!
+bbb = Thank you so much! You're the best!
+cc = THANK YOUUU
+ccc = hahahaha thank you!!!!!
+gg = So glad you found me 🫶
+ggg = Thank you so much! I'm so glad you found me 🫶
+hh = Hi!! How's it going?!
+hhh = Hiiii how's it going?!
+ll = Let's gooooo!!!
+lll = Let's gooooo! Thank you so much!
+omw = On my way!
+pp = Can't wait to see you at a show!!
+qq = I'm so glad you like it!
+ss = So stoked you found me!
+sss = Thank you so much! So stoked you found me!! 🫶
+tt = Thank you!!
+ttt = Thank you so much! I will for sure!!
+ww = hahahaha whatttt?!
+www = No way?! That's so cool!
+wwww = woohooooo!!!
+wl = Would love to see you there!
+wll = I would love to see you at a show!!
+wtk = Who are some artists you're inspired by??
+xx = Thank you so much!
+xxx = Thank you so much! That means a lot!!
+xxxx = Thank you so much! I really appreciate it!`;
+if(!tone.shortcuts) tone.shortcuts = SHORTCUTS_DEFAULT;
 const VIBES=[{id:'chill',label:'Chill & casual'},{id:'hype',label:'Hype & energetic'},{id:'sweet',label:'Warm & sweet'},{id:'funny',label:'Funny & playful'},{id:'pro',label:'Polished & pro'}];
 
 /* ============ DRAFT GENERATION ============ */
@@ -958,6 +987,11 @@ function renderTone(){
 “appreciate you always, means the world fr”
 “haha you already know part 2 is comin 🔥”" oninput="tone.samples=this.value">${escapeHtml(tone.samples)}</textarea>
       </div>
+      <div class="card">
+        <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>Your shortcuts</h4>
+        <p class="hint">Your go-to fan replies (pulled from your phone's text shortcuts). Drafts lean on these so they sound exactly like you. Format: <b>shortcut = phrase</b>, one per line.</p>
+        <textarea class="field" id="t-shortcuts" style="min-height:240px" oninput="tone.shortcuts=this.value">${escapeHtml(tone.shortcuts)}</textarea>
+      </div>
       <div class="row2">
         <div class="card">
           <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg>Words &amp; phrases you always use</h4>
@@ -984,7 +1018,7 @@ function renderTone(){
       </div>
       <div class="card"><h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>Live preview</h4><p class="hint">How a reply reads with your current settings:</p><div class="preview" id="tonePreview"></div></div>
       <div class="card">
-        <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>Keyboard shortcuts</h4>
+        <h4><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>App shortcuts</h4>
         <p class="hint">Fly through replies without your mouse — these work while a message is open in the inbox.</p>
         <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)"><span>Approve &amp; send</span><span><kbd style="display:inline-block;min-width:20px;text-align:center;padding:2px 7px;margin:0 1px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:var(--bg);font:600 12px ui-monospace,Menlo,monospace;color:var(--txt)">⌥</kbd><kbd style="display:inline-block;min-width:20px;text-align:center;padding:2px 7px;margin:0 1px;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;background:var(--bg);font:600 12px ui-monospace,Menlo,monospace;color:var(--txt)">return</kbd></span></div>
