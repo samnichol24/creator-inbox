@@ -407,7 +407,8 @@ const ICON = {
   messenger:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M12 3C6.9 3 3 6.8 3 11.9c0 2.7 1.1 5 2.9 6.6V22l2.6-1.4c.7.2 1.5.3 2.5.3 5.1 0 9-3.8 9-8.9S17.1 3 12 3zm.9 11.5l-2.3-2.4-4.4 2.4 4.8-5 2.3 2.4 4.3-2.4-4.7 5z"/></svg>',
   discord:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M19.3 6.2A16 16 0 0015.4 5l-.2.4a14.9 14.9 0 014.4 2.2 13.6 13.6 0 00-11.3 0A14.9 14.9 0 018.8 5.4L8.6 5A16 16 0 004.7 6.2C2.3 9.8 1.6 13.3 1.9 16.7a16.2 16.2 0 004.9 2.5l.6-1a10.6 10.6 0 01-1.7-.8l.4-.3a11.5 11.5 0 009.8 0l.4.3c-.5.3-1.1.6-1.7.8l.6 1a16.1 16.1 0 004.9-2.5c.4-4-.7-7.4-2.8-10.5zM8.9 14.5c-.9 0-1.7-.8-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9zm6.2 0c-.9 0-1.7-.8-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.7 1.9-1.7 1.9z"/></svg>',
   mail:'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
-  sms:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M4 4h16a1 1 0 011 1v11a1 1 0 01-1 1H8l-4 4V5a1 1 0 011-1z"/></svg>'
+  sms:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M4 4h16a1 1 0 011 1v11a1 1 0 01-1 1H8l-4 4V5a1 1 0 011-1z"/></svg>',
+  threads:'<svg viewBox="0 0 24 24" fill="#fff"><path d="M12.5 2C7 2 3.3 5.2 3.1 11.8 3.3 18.5 7 22 12.5 22c3 0 5.2-1.1 6.6-3l-1.7-1.1c-1 1.3-2.5 2-4.9 2-3.9 0-5.9-2.5-6-9.1.1-6.5 2.1-9 6-9 2.6 0 4.2 1 5 3.3.6 1.6.7 3.6.3 5.3-.5 1.9-1.8 3-3.7 3-1.3 0-2.3-.6-2.5-1.7-.1-.9.4-1.6 1.7-1.9.5-.1 1-.1 1.6-.1 0-.7-.1-1.3-.3-1.7-.5-.1-1-.1-1.5 0-2.4.3-3.8 1.7-3.6 3.9.2 2 1.8 3.4 4.1 3.4 3 0 4.9-1.8 5.6-4.5.5-2.1.4-4.6-.4-6.6C17.4 3.3 15.3 2 12.5 2z"/></svg>'
 };
 
 const CHANNELS = [
@@ -420,6 +421,7 @@ const CHANNELS = [
   {id:'fb-cmt',  name:'Facebook Comments',  glyph:'facebook',  bg:'#1877f2', fg:'#fff', type:'comment'},
   {id:'fb-msgr', name:'Facebook Messenger', glyph:'messenger', bg:'linear-gradient(135deg,#00b2ff,#a033ff,#ff5b8e)', fg:'#fff', type:'dm'},
   {id:'discord', name:'Discord',            glyph:'discord',   bg:'#5865f2', fg:'#fff', type:'dm'},
+  {id:'threads', name:'Threads',            glyph:'threads',   bg:'#000000', fg:'#fff', type:'comment'},
   {id:'email',   name:'Fan Email',          glyph:'mail',      bg:'#34b7f1', fg:'#fff', type:'dm'},
   {id:'sms',     name:'Fan SMS / Text',     glyph:'sms',       bg:'#12b76a', fg:'#fff', type:'dm'},
 ];
@@ -918,11 +920,13 @@ const CONNECTORS=[
   {id:'sms',     name:'SMS / Text',glyph:'sms',       bg:'#12b76a', avail:'ok',   status:'Available now',
     cap:'A dedicated fan text number (via Twilio). Fans text it; you reply from here.'},
   {id:'discord', name:'Discord',   glyph:'discord',   bg:'#5865f2', avail:'ok',   status:'Available now',
-    cap:'Messages in your server and DMs sent to your bot, through an official Discord bot.'},
-  {id:'instagram',name:'Instagram',glyph:'instagram', bg:'linear-gradient(135deg,#feda75,#d62976,#962fbf)', avail:'warn', status:'Business account',
-    cap:'DMs and comments — requires an Instagram Professional/Creator account linked to a Facebook Page, plus Meta app review. A 24-hour reply window applies.'},
-  {id:'facebook',name:'Facebook',  glyph:'facebook',  bg:'#1877f2', avail:'warn', status:'Business account',
-    cap:'Page comments and Messenger — works for Facebook Pages (not personal profiles) after Meta app review.'},
+    cap:'Messages in your server, through an official Discord bot. Add the bot to your server, paste its token, and you’re live.'},
+  {id:'threads', name:'Threads',   glyph:'threads',   bg:'#000000', fg:'#fff', avail:'ok', status:'Available now',
+    cap:'Read and reply to replies on your own Threads posts, through Meta’s official Threads API. Own-account access needs no app review.'},
+  {id:'instagram',name:'Instagram',glyph:'instagram', bg:'linear-gradient(135deg,#feda75,#d62976,#962fbf)', avail:'ok', status:'Available now',
+    cap:'DMs and comments on your own Instagram professional account. No app review for your own account. A 24-hour reply window applies to DMs.'},
+  {id:'facebook',name:'Facebook',  glyph:'facebook',  bg:'#1877f2', avail:'ok', status:'Available now',
+    cap:'Comments and Messenger for your own Facebook Page (not personal profiles). No app review for your own Page.'},
   {id:'tiktok',  name:'TikTok',    glyph:'tiktok',    bg:'#010101', fg:'#00f2ea', avail:'warn', status:'Limited',
     cap:'Comment reading/moderation only, via TikTok’s approved developer program (access is restricted). TikTok has no API for DMs.'},
   {id:'snapchat',name:'Snapchat',  glyph:'snapchat',  bg:'#fffc00', fg:'#000', avail:'none', status:'No API',
@@ -1060,25 +1064,40 @@ render();
   let status;
   try { status = await fetch('/api/status').then(r=>r.json()); }
   catch(e){ return; } // not served by backend (opened as plain file) → stay in demo mode
-  window.__live = !!(status.connected || status.ytConnected);
+  window.__live = !!(status.connected || status.ytConnected || status.igConnected ||
+                     status.fbConnected || status.thConnected || status.dcConnected);
 
-  // 1) Make the Email "Connect" button start the real Google sign-in
+  // 1) Make each "Connect" button start that platform's real sign-in
+  const AUTH_ROUTES = {
+    email:'/auth/google', youtube:'/auth/google/youtube',
+    instagram:'/auth/instagram', facebook:'/auth/facebook',
+    threads:'/auth/threads', discord:'/auth/discord'
+  };
   const origConnect = window.connect;
   window.connect = function(id, name){
-    if(id === 'email'){ window.location.href = '/auth/google'; return; }
-    if(id === 'youtube'){ window.location.href = '/auth/google/youtube'; return; }
+    if(AUTH_ROUTES[id]){ window.location.href = AUTH_ROUTES[id]; return; }
     origConnect(id, name);
   };
 
   // Reflect real connection state on the Connections screen
-  if(status.connected) state.connections['email'] = true;
-  if(status.ytConnected) state.connections['youtube'] = true;
-  if((status.connected || status.ytConnected) && state.view === 'connect') renderConnect();
-  // Friendly heads-up if keys aren't in place yet
-  if(!status.hasGoogleKeys){
-    const c = CONNECTORS.find(c=>c.id==='email');
-    if(c) c.cap = 'Add your Google keys in the host settings to enable this (see README). ' + c.cap;
-  }
+  const CONN = {
+    email:status.connected, youtube:status.ytConnected, instagram:status.igConnected,
+    facebook:status.fbConnected, threads:status.thConnected, discord:status.dcConnected
+  };
+  let anyOn = false;
+  Object.entries(CONN).forEach(([k,v])=>{ if(v){ state.connections[k]=true; anyOn=true; } });
+  if(anyOn && state.view === 'connect') renderConnect();
+  // Friendly heads-up if a platform's app keys aren't in place yet
+  const KEY_FLAGS = {
+    email:status.hasGoogleKeys, youtube:status.hasGoogleKeys,
+    instagram:status.hasInstagramKeys, facebook:status.hasFacebookKeys, threads:status.hasThreadsKeys
+  };
+  Object.entries(KEY_FLAGS).forEach(([id,hasKeys])=>{
+    if(hasKeys === false){
+      const c = CONNECTORS.find(c=>c.id===id);
+      if(c && !/host settings/.test(c.cap)) c.cap = 'Add this platform’s app keys in the host settings to enable sign-in (see README). ' + c.cap;
+    }
+  });
 
   // 2) Refresh pulls REAL emails when connected, otherwise keeps demo behavior
   const origRefresh = window.refreshMessages;
@@ -1100,7 +1119,7 @@ render();
         added++;
       });
       if(state.view !== 'inbox') setView('inbox'); else render();
-      toast(added ? `${added} new email${added>1?'s':''} came in` : 'No new emails right now');
+      toast(added ? `${added} new message${added>1?'s':''} came in` : 'No new messages right now');
     }catch(err){ toast('Could not reach your inbox'); }
   };
 
