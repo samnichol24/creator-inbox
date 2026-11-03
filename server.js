@@ -8,6 +8,7 @@ import * as ig from './lib/instagram.js';
 import * as fb from './lib/facebook.js';
 import * as th from './lib/threads.js';
 import * as dc from './lib/discord.js';
+import * as db from './lib/db.js';
 import { generateDraft } from './lib/ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -29,59 +30,70 @@ app.use(session({
   cookie: { maxAge: 30 * 24 * 3600 * 1000, secure: 'auto', sameSite: 'lax' }
 }));
 
-// --- simple in-memory store (fine for a personal MVP; swap for a DB later) ---
+// --- in-memory store, backed by the database (see initStore) ---
 const store = {
-  tokens: null,     // Gmail OAuth tokens (email account)
-  email: null,      // connected gmail address
-  ytTokens: null,   // YouTube OAuth tokens (may be a different Google account)
-  ytName: null,     // connected YouTube channel name
-  // Instagram (own professional account)
-  igToken: null, igUser: null, igId: null,
-  // Facebook Page
-  fbToken: null, fbPageId: null, fbPageName: null,
-  // Threads (separate Meta app/token)
-  thToken: null, thUser: null, thId: null,
-  // Discord bot
-  dcToken: null, dcName: null,
+  tokens: null, email: null,          // Gmail (email account)
+  ytTokens: null, ytName: null,       // YouTube (may be a different Google account)
+  igToken: null, igUser: null, igId: null,          // Instagram
+  fbToken: null, fbPageId: null, fbPageName: null,  // Facebook Page
+  thToken: null, thUser: null, thId: null,          // Threads
+  dcToken: null, dcName: null,        // Discord bot
   tone: { name: 'Sam', samples: '', signoff: '', emojis: '🙌 ✨ 💜 🔥' },
-  cache: [],         // last fetched messages
-  replied: new Set() // gids we've already replied to (drop them from the list)
+  cache: [],
+  replied: new Set()
 };
 
-// --- Permanent connections from saved env vars (survive restarts/sleep) ---
-if (process.env.GOOGLE_REFRESH_TOKEN) {
-  store.tokens = { refresh_token: process.env.GOOGLE_REFRESH_TOKEN };
-  store.email = process.env.CONNECTED_EMAIL || 'connected';
-}
-if (process.env.YOUTUBE_REFRESH_TOKEN) {
-  store.ytTokens = { refresh_token: process.env.YOUTUBE_REFRESH_TOKEN };
-  store.ytName = process.env.YOUTUBE_CHANNEL || 'YouTube';
-}
-if (process.env.INSTAGRAM_ACCESS_TOKEN) {
-  store.igToken = process.env.INSTAGRAM_ACCESS_TOKEN;
-  store.igUser = process.env.INSTAGRAM_USER || 'Instagram';
-  store.igId = process.env.INSTAGRAM_USER_ID || null;
-}
-if (process.env.FACEBOOK_PAGE_TOKEN) {
-  store.fbToken = process.env.FACEBOOK_PAGE_TOKEN;
-  store.fbPageId = process.env.FACEBOOK_PAGE_ID || null;
-  store.fbPageName = process.env.FACEBOOK_PAGE_NAME || 'Facebook Page';
-}
-if (process.env.THREADS_ACCESS_TOKEN) {
-  store.thToken = process.env.THREADS_ACCESS_TOKEN;
-  store.thUser = process.env.THREADS_USER || 'Threads';
-  store.thId = process.env.THREADS_USER_ID || null;
-}
-if (process.env.DISCORD_BOT_TOKEN) {
-  store.dcToken = process.env.DISCORD_BOT_TOKEN;
-  store.dcName = process.env.DISCORD_BOT_NAME || 'Discord';
-}
+// --- Load everything from the database on boot, falling back to env vars ---
+// The database is the source of truth. For backward compatibility, any token
+// still only in an env var is loaded AND migrated into the database, so after
+// the first boot nothing depends on env vars for tokens anymore.
+async function initStore() {
+  let saved = {};
+  if (db.enabled()) {
+    try { saved = await db.loadAll(); }
+    catch (e) { console.error('db load failed, using env vars:', e.message); }
+  }
+  // Prefer the DB value; else take the env value and migrate it into the DB.
+  async function pick(key, fromDb, fromEnv) {
+    if (fromDb) return fromDb;
+    if (fromEnv) { await db.save(key, fromEnv); return fromEnv; }
+    return null;
+  }
 
-// Best-effort: extend the 60-day IG/Threads tokens on boot so they keep rolling.
-(async () => {
-  try { if (store.igToken) store.igToken = await ig.refreshToken(store.igToken); } catch {}
-  try { if (store.thToken) store.thToken = await th.refreshToken(store.thToken); } catch {}
-})();
+  const g = await pick('google_email', saved.google_email,
+    process.env.GOOGLE_REFRESH_TOKEN ? { refresh_token: process.env.GOOGLE_REFRESH_TOKEN, email: process.env.CONNECTED_EMAIL || 'connected' } : null);
+  if (g?.refresh_token) { store.tokens = { refresh_token: g.refresh_token }; store.email = g.email || 'connected'; }
+
+  const yt = await pick('google_youtube', saved.google_youtube,
+    process.env.YOUTUBE_REFRESH_TOKEN ? { refresh_token: process.env.YOUTUBE_REFRESH_TOKEN, channel: process.env.YOUTUBE_CHANNEL || 'YouTube' } : null);
+  if (yt?.refresh_token) { store.ytTokens = { refresh_token: yt.refresh_token }; store.ytName = yt.channel || 'YouTube'; }
+
+  const i = await pick('instagram', saved.instagram,
+    process.env.INSTAGRAM_ACCESS_TOKEN ? { token: process.env.INSTAGRAM_ACCESS_TOKEN, userId: process.env.INSTAGRAM_USER_ID || null, username: process.env.INSTAGRAM_USER || 'Instagram' } : null);
+  if (i?.token) { store.igToken = i.token; store.igId = i.userId; store.igUser = i.username; }
+
+  const f = await pick('facebook', saved.facebook,
+    process.env.FACEBOOK_PAGE_TOKEN ? { pageToken: process.env.FACEBOOK_PAGE_TOKEN, pageId: process.env.FACEBOOK_PAGE_ID || null, pageName: process.env.FACEBOOK_PAGE_NAME || 'Facebook Page' } : null);
+  if (f?.pageToken) { store.fbToken = f.pageToken; store.fbPageId = f.pageId; store.fbPageName = f.pageName; }
+
+  const t = await pick('threads', saved.threads,
+    process.env.THREADS_ACCESS_TOKEN ? { token: process.env.THREADS_ACCESS_TOKEN, userId: process.env.THREADS_USER_ID || null, username: process.env.THREADS_USER || 'Threads' } : null);
+  if (t?.token) { store.thToken = t.token; store.thId = t.userId; store.thUser = t.username; }
+
+  const d = await pick('discord', saved.discord,
+    process.env.DISCORD_BOT_TOKEN ? { botToken: process.env.DISCORD_BOT_TOKEN, name: process.env.DISCORD_BOT_NAME || 'Discord' } : null);
+  if (d?.botToken) { store.dcToken = d.botToken; store.dcName = d.name; }
+
+  if (saved.tone) store.tone = { ...store.tone, ...saved.tone };
+  if (Array.isArray(saved.replied)) store.replied = new Set(saved.replied);
+
+  // Roll the 60-day Instagram/Threads tokens forward and persist the new ones.
+  try { if (store.igToken) { store.igToken = await ig.refreshToken(store.igToken); await db.save('instagram', { token: store.igToken, userId: store.igId, username: store.igUser }); } } catch {}
+  try { if (store.thToken) { store.thToken = await th.refreshToken(store.thToken); await db.save('threads', { token: store.thToken, userId: store.thId, username: store.thUser }); } } catch {}
+
+  console.log('Store initialized' + (db.enabled() ? ' (database connected)' : ' (no database — using env vars only)'));
+}
+initStore();
 
 // ---------- Auth: Google (email + YouTube) ----------
 app.get('/auth/google', (req, res) => {
@@ -98,13 +110,13 @@ app.get('/auth/google/callback', async (req, res) => {
     if (req.query.state === 'youtube') {
       store.ytTokens = tokens;
       try { store.ytName = await getChannelTitle(tokens); } catch (e) { store.ytName = 'YouTube'; }
-      if (tokens.refresh_token) console.log('SAVE_THIS_YOUTUBE_REFRESH_TOKEN=' + tokens.refresh_token);
+      if (tokens.refresh_token) await db.save('google_youtube', { refresh_token: tokens.refresh_token, channel: store.ytName });
       return res.redirect('/?connected=youtube');
     }
     store.tokens = tokens;
     store.email = await getProfileEmail(tokens);
     req.session.connected = true;
-    if (tokens.refresh_token) console.log('SAVE_THIS_REFRESH_TOKEN=' + tokens.refresh_token);
+    if (tokens.refresh_token) await db.save('google_email', { refresh_token: tokens.refresh_token, email: store.email });
     res.redirect('/?connected=1');
   } catch (e) {
     console.error(e);
@@ -121,9 +133,7 @@ app.get('/auth/instagram/callback', async (req, res) => {
   try {
     const { token, userId, username } = await ig.exchangeCode(req.query.code);
     store.igToken = token; store.igId = userId; store.igUser = username;
-    console.log('SAVE_THIS_INSTAGRAM_ACCESS_TOKEN=' + token);
-    console.log('SAVE_THIS_INSTAGRAM_USER_ID=' + userId);
-    console.log('SAVE_THIS_INSTAGRAM_USER=' + username);
+    await db.save('instagram', { token, userId, username });
     res.redirect('/?connected=instagram');
   } catch (e) { console.error('ig auth', e.message); res.redirect('/?error=instagram'); }
 });
@@ -137,9 +147,7 @@ app.get('/auth/facebook/callback', async (req, res) => {
   try {
     const { pageId, pageName, pageToken } = await fb.exchangeCode(req.query.code);
     store.fbToken = pageToken; store.fbPageId = pageId; store.fbPageName = pageName;
-    console.log('SAVE_THIS_FACEBOOK_PAGE_TOKEN=' + pageToken);
-    console.log('SAVE_THIS_FACEBOOK_PAGE_ID=' + pageId);
-    console.log('SAVE_THIS_FACEBOOK_PAGE_NAME=' + pageName);
+    await db.save('facebook', { pageToken, pageId, pageName });
     res.redirect('/?connected=facebook');
   } catch (e) { console.error('fb auth', e.message); res.redirect('/?error=facebook'); }
 });
@@ -153,17 +161,13 @@ app.get('/auth/threads/callback', async (req, res) => {
   try {
     const { token, userId, username } = await th.exchangeCode(req.query.code);
     store.thToken = token; store.thId = userId; store.thUser = username;
-    console.log('SAVE_THIS_THREADS_ACCESS_TOKEN=' + token);
-    console.log('SAVE_THIS_THREADS_USER_ID=' + userId);
-    console.log('SAVE_THIS_THREADS_USER=' + username);
+    await db.save('threads', { token, userId, username });
     res.redirect('/?connected=threads');
   } catch (e) { console.error('threads auth', e.message); res.redirect('/?error=threads'); }
 });
 
 // ---------- Discord: no OAuth code flow — just a bot token. Help invite the bot. ----------
 app.get('/auth/discord', (req, res) => {
-  // Sends the creator to Discord to add their bot to a server. The bot token
-  // itself is pasted into env vars (DISCORD_BOT_TOKEN) — it can't be captured here.
   res.redirect(dc.inviteUrl(process.env.DISCORD_APP_ID));
 });
 
@@ -185,12 +189,13 @@ app.get('/api/status', (req, res) => {
     dcConnected: !!store.dcToken, dcName: store.dcName,
     hasGoogleKeys: hasGoogle, hasInstagramKeys: hasInstagram,
     hasFacebookKeys: hasFacebook, hasThreadsKeys: hasThreads,
-    hasAi: !!process.env.ANTHROPIC_API_KEY
+    hasDb: db.enabled(), hasAi: !!process.env.ANTHROPIC_API_KEY
   });
 });
 
 app.post('/api/tone', (req, res) => {
   store.tone = { ...store.tone, ...(req.body || {}) };
+  db.save('tone', store.tone);
   res.json({ ok: true });
 });
 
@@ -201,7 +206,6 @@ app.get('/api/messages', async (req, res) => {
     let items = [];
     const add = (arr) => { if (Array.isArray(arr)) items = items.concat(arr); };
 
-    // Each platform is isolated so one failure never blocks the others.
     if (store.tokens) {
       try { const e = await listRecentEmails(store.tokens, 50); e.forEach(x => x.ch = 'email'); add(e); }
       catch (e) { console.error('gmail error', e.message); }
@@ -225,9 +229,7 @@ app.get('/api/messages', async (req, res) => {
       try { add(await dc.listMessages(store.dcToken)); } catch (e) { console.error('discord error', e.message); }
     }
 
-    // drop anything already replied to, so sent items leave the list and new ones surface
     items = items.filter(it => !store.replied.has(it.gid));
-    // draft a reply for each
     for (const it of items) {
       it.draft = await generateDraft(it, store.tone);
     }
@@ -273,7 +275,6 @@ app.post('/api/send', async (req, res) => {
         await dc.reply(store.dcToken, cached.discordChannelId, cached.discordMessageId, text);
         break;
       default:
-        // email
         if (!store.tokens) return res.status(401).json({ error: 'Email not connected' });
         await sendReply(store.tokens, {
           to: to || cached.handle,
@@ -283,7 +284,7 @@ app.post('/api/send', async (req, res) => {
           inReplyTo: cached.messageId
         });
     }
-    if (gid) store.replied.add(gid);
+    if (gid) { store.replied.add(gid); db.save('replied', [...store.replied]); }
     res.json({ ok: true });
   } catch (e) {
     console.error('send error', e.message);
