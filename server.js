@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 3000;
 const hasGoogle = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 const hasInstagram = !!(process.env.INSTAGRAM_APP_ID && process.env.INSTAGRAM_APP_SECRET);
 const hasFacebook = !!process.env.FACEBOOK_APP_SECRET; // app id + config id default in lib/facebook.js
-const hasThreads = !!(process.env.THREADS_APP_ID && process.env.THREADS_APP_SECRET);
+const hasThreads = !!process.env.THREADS_APP_SECRET; // app id defaults in lib/threads.js
 
 app.use(express.json({ limit: '1mb' }));
 app.set('trust proxy', 1);
