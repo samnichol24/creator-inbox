@@ -121,8 +121,18 @@ Threads is a **separate** Meta setup from Instagram (its own keys), but just as 
 
 ---
 
+## Make it permanent (database — do this once)
+
+With a database connected, the app saves every platform's token (and your tone sheet) **itself** and reloads them on each restart — so you connect each platform once and it stays logged in, with no copying tokens from logs ever again.
+
+1. In Supabase, open your project → **Project Settings → API**.
+2. Copy the **Project URL** and the **service_role** key (the secret one).
+3. In **Render → Environment**, add `SUPABASE_URL` (the Project URL) and `SUPABASE_SERVICE_KEY` (the service_role key) → **Save**.
+
+That's the only secret you paste by hand. After it, every future connection persists on its own. The app also works fine without this — it just falls back to remembering connections only while it's awake.
+
 ## Good to know
-- **Restarts:** Gmail/YouTube reconnect themselves from saved tokens; Instagram, Facebook, Threads, and Discord do too once you've saved their tokens in step 6/5/5/4 above. The free Render tier sleeps when idle and wakes on the next visit.
+- **Restarts:** with the database connected (above), all six platforms reconnect themselves automatically. Without it, connections only last while the app is awake. The free Render tier sleeps when idle and wakes on the next visit.
 - **Instagram & Threads tokens** last ~60 days but the app **auto-renews** them on each restart, so as long as you open the portal now and then they stay live. Facebook Page tokens and the Discord bot token don't expire.
 - **Is this safe for my accounts?** Yes — every platform here uses its **official API**. Official APIs don't suppress your reach or risk your account standing; that only happens with unofficial bots/scrapers, which this is not.
 - **One optional extra for Instagram/Facebook DMs:** replying *later than 24 hours* after a fan messages needs Meta's "human agent" feature, which *does* require business verification. We've skipped it for now; say the word if you want it.

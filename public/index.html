@@ -139,6 +139,7 @@
   .it-top{display:flex;align-items:baseline;gap:7px}
   .it-name{font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .it-handle{font-size:12px;color:var(--txt-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+  .it-acct{font-size:11px;color:var(--accent);background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:1px 8px;white-space:nowrap;flex:none;max-width:160px;overflow:hidden;text-overflow:ellipsis}
   .it-time{font-size:11.5px;color:var(--txt-3);white-space:nowrap;flex:none}
   .it-msg{font-size:12.5px;color:var(--txt-2);margin-top:4px;padding-right:46px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45}
   .it-unread{position:absolute;right:16px;bottom:16px;width:8px;height:8px;border-radius:50%;background:var(--down)}
@@ -304,6 +305,13 @@
   .conn-btn.disabled{background:transparent;border-color:var(--line);color:var(--txt-3);cursor:not-allowed}
   .conn-btn svg{width:14px;height:14px}
   .conn-dis{background:none;border:0;color:var(--txt-3);font-size:11.5px;margin-top:6px;cursor:pointer;text-decoration:underline}
+  .conn-btn.add{background:transparent;border:1px solid var(--line);color:var(--accent);font-size:11.5px;padding:5px 11px;margin-top:6px}
+  .conn-btn.add:hover{filter:none;background:var(--surface-2)}
+  .acct-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+  .acct-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:12px}
+  .acct-chip b{font-weight:600;color:var(--txt);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acct-x{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:0;background:var(--line);color:var(--txt-2);font-size:13px;line-height:1;cursor:pointer}
+  .acct-x:hover{background:var(--down,#e5484d);color:#fff}
   .conn-note{font-size:12px;color:var(--txt-2);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 15px;margin-top:20px;line-height:1.55}
   .conn-note b{color:var(--txt)}
 
@@ -635,7 +643,7 @@ function itemRow(m){
     <div class="thumb"><div class="av" style="background:${avatarColor(m.name)}">${initials(m.name)}</div>
       <div class="pf" style="background:${ch.bg}">${colorGlyph(ch)}</div></div>
     <div class="it-body">
-      <div class="it-top"><span class="it-name">${escapeHtml(m.name)}</span><span class="it-handle">${escapeHtml(m.handle)}</span><span class="it-time">${m.time}</span></div>
+      <div class="it-top"><span class="it-name">${escapeHtml(m.name)}</span><span class="it-handle">${escapeHtml(m.handle)}</span>${m.acctLabel?`<span class="it-acct">→ ${escapeHtml(m.acctLabel)}</span>`:''}<span class="it-time">${m.time}</span></div>
       <div class="it-msg">${escapeHtml(m.text)}</div>
     </div>
     ${sent
@@ -655,7 +663,7 @@ function renderDetail(){
     <div class="d-head">
       <div class="av" style="background:${avatarColor(m.name)}">${initials(m.name)}</div>
       <div class="meta"><h3>${escapeHtml(m.name)}</h3>
-        <div class="chn"><span class="ico" style="background:${ch.bg}">${colorGlyph(ch)}</span>${ch.name} · ${ch.type==='dm'?'Direct message':'Comment'} · ${m.time} ago</div></div>
+        <div class="chn"><span class="ico" style="background:${ch.bg}">${colorGlyph(ch)}</span>${ch.name} · ${ch.type==='dm'?'Direct message':'Comment'}${m.acctLabel?` · on <b>${escapeHtml(m.acctLabel)}</b>`:''} · ${m.time} ago</div></div>
       <div class="kbd-hint"><span class="kbd">↑</span><span class="kbd">↓</span> to move</div>
     </div>
     <div class="conv"><div class="bubble-in">${escapeHtml(m.text)}<div class="m-meta">${escapeHtml(m.handle)} · ${m.time} ago</div></div></div>
@@ -948,17 +956,37 @@ function renderConnect(){
 
     <div class="conn-grid">
       ${CONNECTORS.map(c=>{
-        const on=state.connections[c.id];
         const tagClass=c.avail==='ok'?'ok':c.avail==='warn'?'warn':'none';
-        let action;
-        if(c.avail==='none') action=`<button class="conn-btn disabled" disabled>Not available</button>`;
-        else if(on) action=`<div style="text-align:right"><button class="conn-btn connected"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Connected</button><br/><button class="conn-dis" onclick="disconnect('${c.id}')">Disconnect</button></div>`;
-        else action=`<button class="conn-btn" onclick="connect('${c.id}','${escapeHtml(c.name)}')">Connect</button>`;
+        // Live mode: window.LIVE_ACCOUNTS holds the real list of connected
+        // accounts per platform. Demo mode (opened as a file) → null, keep booleans.
+        const liveAccts = (window.LIVE_ACCOUNTS && window.LIVE_ACCOUNTS[c.id]) || null;
+        const on = liveAccts ? liveAccts.length>0 : state.connections[c.id];
+        let action, chips='';
+        if(c.avail==='none'){
+          action=`<button class="conn-btn disabled" disabled>Not available</button>`;
+        } else if(liveAccts){
+          // real multi-account UI
+          if(liveAccts.length){
+            action=`<div style="text-align:right">
+              <span class="conn-btn connected" style="cursor:default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>${liveAccts.length} connected</span>
+              <br/><button class="conn-btn add" onclick="connect('${c.id}','${escapeHtml(c.name)}')">+ Add another</button></div>`;
+            chips=`<div class="acct-chips">${liveAccts.map(a=>
+              `<span class="acct-chip"><b>${escapeHtml(a.label||'')}</b><button class="acct-x" title="Disconnect this account" onclick="liveDisconnect('${c.id}','${jsAttr(a.id)}','${jsAttr(a.label||'')}')">×</button></span>`
+            ).join('')}</div>`;
+          } else {
+            action=`<button class="conn-btn" onclick="connect('${c.id}','${escapeHtml(c.name)}')">Connect</button>`;
+          }
+        } else if(on){
+          action=`<div style="text-align:right"><button class="conn-btn connected"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>Connected</button><br/><button class="conn-dis" onclick="disconnect('${c.id}')">Disconnect</button></div>`;
+        } else {
+          action=`<button class="conn-btn" onclick="connect('${c.id}','${escapeHtml(c.name)}')">Connect</button>`;
+        }
         return `<div class="conn-row">
           <span class="conn-ico" style="background:${c.bg}">${connGlyph(c)}</span>
           <div class="conn-main">
             <div class="nm">${c.name} <span class="tag ${tagClass}">${c.status}</span></div>
             <div class="cap">${c.cap}</div>
+            ${chips}
           </div>
           <div class="conn-action">${action}</div>
         </div>`;
@@ -1079,14 +1107,35 @@ render();
     origConnect(id, name);
   };
 
-  // Reflect real connection state on the Connections screen
+  // Reflect real connection state on the Connections screen.
+  // LIVE_ACCOUNTS drives the multi-account UI (chips + "add another").
+  window.LIVE_ACCOUNTS = status.accounts || {
+    email:status.connected?[{id:'email:0',label:status.email}]:[],
+    youtube:status.ytConnected?[{id:'youtube:0',label:status.ytName}]:[],
+    instagram:status.igConnected?[{id:'instagram:0',label:'@'+status.igUser}]:[],
+    facebook:status.fbConnected?[{id:'facebook:0',label:status.fbPageName}]:[],
+    threads:status.thConnected?[{id:'threads:0',label:'@'+status.thUser}]:[],
+    discord:status.dcConnected?[{id:'discord:0',label:status.dcName}]:[]
+  };
   const CONN = {
     email:status.connected, youtube:status.ytConnected, instagram:status.igConnected,
     facebook:status.fbConnected, threads:status.thConnected, discord:status.dcConnected
   };
   let anyOn = false;
   Object.entries(CONN).forEach(([k,v])=>{ if(v){ state.connections[k]=true; anyOn=true; } });
-  if(anyOn && state.view === 'connect') renderConnect();
+  if(state.view === 'connect') renderConnect();
+
+  // Real per-account disconnect (removes just that account server-side).
+  window.liveDisconnect = async function(platform, acct, label){
+    try{
+      await fetch('/api/disconnect?platform='+encodeURIComponent(platform)+'&acct='+encodeURIComponent(acct), {method:'POST'});
+    }catch(e){ toast('Could not disconnect'); return; }
+    const arr = window.LIVE_ACCOUNTS[platform] || [];
+    window.LIVE_ACCOUNTS[platform] = arr.filter(a=>a.id!==acct);
+    if(!window.LIVE_ACCOUNTS[platform].length) state.connections[platform]=false;
+    renderConnect();
+    toast((label||'Account')+' disconnected');
+  };
   // Friendly heads-up if a platform's app keys aren't in place yet
   const KEY_FLAGS = {
     email:status.hasGoogleKeys, youtube:status.hasGoogleKeys,
@@ -1113,7 +1162,7 @@ render();
         if(MESSAGES.find(x=>x.gid === e.gid)) return; // already have it
         const nm = { id: idc++, ch: e.ch || 'email', name:e.name, handle:e.handle, text:e.text,
                      intent:'question', topic:'', time:e.time, live:true, gid:e.gid,
-                     threadId:e.threadId, subject:e.subject };
+                     threadId:e.threadId, subject:e.subject, acct:e.acct, acctLabel:e.acctLabel };
         MESSAGES.unshift(nm);
         state.drafts[nm.id] = e.draft || generateDraft(nm);
         added++;
