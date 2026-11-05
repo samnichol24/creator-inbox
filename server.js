@@ -453,11 +453,12 @@ app.get('/api/diag', async (req, res) => {
       emails: await probe(() => listRecentEmails({ refresh_token: a.refresh_token }, 50)) });
   for (const a of store.youtube)
     out.accounts.push({ platform: 'youtube', label: LABEL.youtube(a), brand: brandOf('youtube', a),
-      comments: await probe(() => listRecentComments({ refresh_token: a.refresh_token }, 365)) });
+      comments: await probe(() => listRecentComments({ refresh_token: a.refresh_token }, 30)) });
   for (const a of store.instagram)
     out.accounts.push({ platform: 'instagram', label: LABEL.instagram(a), brand: brandOf('instagram', a),
       comments: await probe(() => ig.listComments(a.token)),
-      dms: await probe(() => ig.listDMs(a.token)) });
+      dms: await probe(() => ig.listDMs(a.token)),
+      detail: await ig.diagnose(a.token) });
   for (const a of store.facebook)
     out.accounts.push({ platform: 'facebook', label: LABEL.facebook(a), brand: brandOf('facebook', a),
       comments: await probe(() => fb.listComments(a.pageToken, a.pageId)),
