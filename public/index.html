@@ -119,6 +119,11 @@
   .chip:hover{color:var(--txt)}
   .chip.active{background:var(--txt);color:var(--surface);border-color:var(--txt)}
   .filters .count{margin-left:auto;font-size:12px;color:var(--txt-3);white-space:nowrap;padding-left:10px}
+  .brandbar{display:flex;align-items:center;gap:8px;padding:11px 22px;border-bottom:1px solid var(--line);background:var(--surface);overflow-x:auto}
+  .brandbar .blab{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--txt-3);font-weight:700;margin-right:4px;white-space:nowrap}
+  .bchip{padding:6px 14px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--txt-2);font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+  .bchip:hover{color:var(--txt)}
+  .bchip .bdot{width:8px;height:8px;border-radius:50%;flex:none}
 
   /* ============ INBOX ============ */
   .inbox{display:grid;grid-template-columns:minmax(320px,400px) 1fr;flex:1;overflow:hidden}
@@ -311,6 +316,9 @@
   .acct-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
   .acct-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:12px}
   .acct-chip b{font-weight:600;color:var(--txt);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .acct-brand{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--surface);color:var(--txt-2);border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600;cursor:pointer}
+  .acct-brand:hover{color:var(--txt);border-color:var(--txt-3)}
+  .acct-brand .bdot{width:7px;height:7px;border-radius:50%;flex:none}
   .acct-x{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:0;background:var(--line);color:var(--txt-2);font-size:13px;line-height:1;cursor:pointer}
   .acct-x:hover{background:var(--down,#e5484d);color:#fff}
   .conn-note{font-size:12px;color:var(--txt-2);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 15px;margin-top:20px;line-height:1.55}
@@ -381,6 +389,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6L9 17l-5-5"/></svg>Approve all
       </button>
     </div>
+
+    <div class="brandbar" id="brandBar" hidden></div>
 
     <div class="filters" id="filters">
       <button class="chip active" data-f="all" onclick="setTypeFilter('all')">All</button>
@@ -525,7 +535,7 @@ function injectPhrase(text,m){const p=tone.phrases.split(/[\n,]/).map(s=>s.trim(
 function generateDraft(m){let g=greetingFor(m),b=pick(bodyFor(m),m.id);b=injectPhrase(b,m);let full=g+b;if(tone.vibe==='pro')full=full.charAt(0).toUpperCase()+full.slice(1);full=applyEmoji(full,m);full=full+signature();return full.trim();}
 
 /* ============ STATE ============ */
-let state={view:'inbox',channel:'all',typeFilter:'all',search:'',selected:null,drafts:{},sent:{},gran:'week',fanSort:'all',connections:{}};
+let state={view:'inbox',channel:'all',typeFilter:'all',brand:'all',search:'',selected:null,drafts:{},sent:{},gran:'week',fanSort:'all',connections:{}};
 MESSAGES.forEach(m=>{state.drafts[m.id]=generateDraft(m);});
 
 /* ============ ANALYTICS DATA (deterministic mock) ============ */
@@ -604,6 +614,7 @@ function chanRow(c,count,active){
 /* ============ INBOX LIST ============ */
 function visibleMessages(){
   return MESSAGES.filter(m=>{
+    if(state.brand!=='all'&&m.brand!==state.brand)return false;
     if(state.channel!=='all'&&m.ch!==state.channel)return false;
     const ch=CH[m.ch];
     if(state.typeFilter==='dm'&&ch.type!=='dm')return false;
@@ -620,6 +631,7 @@ function avatarColor(n){const cols=['#6d5cff','#e1306c','#12b76a','#eb6834','#18
 function render(){
   state.search=document.getElementById('search').value.trim();
   renderChannels();
+  renderBrandBar();
   const list=document.getElementById('list');
   const msgs=visibleMessages();
   const title=state.channel==='all'?'All Messages':CH[state.channel].name;
@@ -722,6 +734,44 @@ function refreshMessages(){
 
 function setChannel(id){state.channel=id;state.selected=null;render();}
 function setTypeFilter(f){state.typeFilter=f;document.querySelectorAll('.filters .chip').forEach(c=>c.classList.toggle('active',c.dataset.f===f));render();}
+const BRAND_COLORS={sam:'#6d5cff',ignite:'#eb6834'};
+function renderBrandBar(){
+  const bar=document.getElementById('brandBar');if(!bar)return;
+  const brands=window.BRANDS||[];
+  // Only show the brand separator when live with two or more brands set up.
+  if(!window.__live||brands.length<2){bar.hidden=true;return;}
+  bar.hidden=false;
+  const chip=(id,label,color)=>{
+    const n=id==='all'?MESSAGES.length:MESSAGES.filter(m=>m.brand===id).length;
+    const active=state.brand===id;
+    const dot=id==='all'?'':`<span class="bdot" style="background:${color}"></span>`;
+    const bg=active?(id==='all'?'var(--txt)':color):'transparent';
+    const fg=active?(id==='all'?'var(--surface)':'#fff'):'';
+    const style=active?`style="background:${bg};color:${fg};border-color:transparent"`:'';
+    const cnt=n?` <span style="opacity:.65;font-weight:500">${n}</span>`:'';
+    return `<button class="bchip ${active?'active':''}" ${style} onclick="setBrand('${id}')">${dot}${escapeHtml(label)}${cnt}</button>`;
+  };
+  let html=`<span class="blab">View</span>`+chip('all','All accounts','');
+  for(const b of brands)html+=chip(b.id,b.label,BRAND_COLORS[b.id]||'#888');
+  bar.innerHTML=html;
+}
+function setBrand(id){state.brand=id;renderBrandBar();render();}
+// Move one connected account to the other brand (persists to the server).
+async function cycleAcctBrand(platform, acctId){
+  const arr=(window.LIVE_ACCOUNTS&&window.LIVE_ACCOUNTS[platform])||[];
+  const a=arr.find(x=>x.id===acctId); if(!a)return;
+  const ids=(window.BRANDS||[]).map(b=>b.id); if(ids.length<2)return;
+  const next=ids[(Math.max(0,ids.indexOf(a.brand))+1)%ids.length];
+  const nb=(window.BRANDS||[]).find(b=>b.id===next);
+  a.brand=next; a.brandLabel=nb?nb.label:next;
+  MESSAGES.forEach(m=>{ if(m.acct===acctId){ m.brand=next; m.brandLabel=a.brandLabel; } });
+  renderConnect(); renderBrandBar();
+  try{
+    const r=await fetch('/api/brand',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acct:acctId,brand:next})});
+    if(!r.ok) throw new Error('save failed');
+    toast('Moved to '+a.brandLabel);
+  }catch(e){ toast('Could not save brand change'); }
+}
 
 function setView(v){
   state.view=v;
@@ -975,9 +1025,14 @@ function renderConnect(){
             action=`<div style="text-align:right">
               <span class="conn-btn connected" style="cursor:default"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>${liveAccts.length} connected</span>
               <br/><button class="conn-btn add" onclick="connect('${c.id}','${escapeHtml(c.name)}')">+ Add another</button></div>`;
-            chips=`<div class="acct-chips">${liveAccts.map(a=>
-              `<span class="acct-chip"><b>${escapeHtml(a.label||'')}</b><button class="acct-x" title="Disconnect this account" onclick="liveDisconnect('${c.id}','${jsAttr(a.id)}','${jsAttr(a.label||'')}')">×</button></span>`
-            ).join('')}</div>`;
+            chips=`<div class="acct-chips">${liveAccts.map(a=>{
+              const bcol=BRAND_COLORS[a.brand]||'#888';
+              const blabel=a.brandLabel||(a.brand==='ignite'?'Ignite Music Marketing':'Sam Nicholson Music');
+              const brandBtn=(window.BRANDS&&window.BRANDS.length>1)
+                ? `<button class="acct-brand" title="Click to move this account to the other brand" onclick="cycleAcctBrand('${c.id}','${jsAttr(a.id)}')"><span class="bdot" style="background:${bcol}"></span>${escapeHtml(blabel)}</button>`
+                : '';
+              return `<span class="acct-chip"><b>${escapeHtml(a.label||'')}</b>${brandBtn}<button class="acct-x" title="Disconnect this account" onclick="liveDisconnect('${c.id}','${jsAttr(a.id)}','${jsAttr(a.label||'')}')">×</button></span>`;
+            }).join('')}</div>`;
           } else {
             action=`<button class="conn-btn" onclick="connect('${c.id}','${escapeHtml(c.name)}')">Connect</button>`;
           }
@@ -1099,6 +1154,7 @@ render();
   catch(e){ return; } // not served by backend (opened as plain file) → stay in demo mode
   window.__live = !!(status.connected || status.ytConnected || status.igConnected ||
                      status.fbConnected || status.thConnected || status.dcConnected);
+  window.BRANDS = status.brands || [];
 
   // When the app is live, the hardcoded demo messages must never show. Clear
   // them out up front and show a loading state until the real pull finishes.
