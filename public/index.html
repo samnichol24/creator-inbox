@@ -258,6 +258,7 @@
   @keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   #refreshBtn.spin svg{animation:spin .6s linear}
   @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+  .empty svg.spin{animation:spin 1s linear infinite;transform-origin:center}
 
   /* ============ FANS ============ */
   .fan-controls{display:flex;align-items:center;gap:12px;margin-bottom:18px}
@@ -629,7 +630,11 @@ function render(){
   document.getElementById('filterCount').textContent=msgs.length+' shown';
 
   if(!msgs.length){
-    list.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 6L9 17l-5-5"/></svg><div><b>All caught up</b><br/>Nothing here right now.</div></div>`;
+    if(window.__loading){
+      list.innerHTML=`<div class="empty"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><div><b>Loading your messages…</b><br/>Pulling in comments and DMs from your connected accounts.</div></div>`;
+    } else {
+      list.innerHTML=`<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 6L9 17l-5-5"/></svg><div><b>All caught up</b><br/>Nothing here right now.</div></div>`;
+    }
     document.getElementById('detail').innerHTML=detailEmpty();return;
   }
   list.innerHTML=msgs.map(itemRow).join('');
@@ -1095,6 +1100,18 @@ render();
   window.__live = !!(status.connected || status.ytConnected || status.igConnected ||
                      status.fbConnected || status.thConnected || status.dcConnected);
 
+  // When the app is live, the hardcoded demo messages must never show. Clear
+  // them out up front and show a loading state until the real pull finishes.
+  if(window.__live){
+    MESSAGES.length = 0;
+    idc = 1;
+    state.selected = null;
+    state.sent = {};
+    state.drafts = {};
+    window.__loading = true;
+    if(typeof render === 'function' && state.view === 'inbox') render();
+  }
+
   // 1) Make each "Connect" button start that platform's real sign-in
   const AUTH_ROUTES = {
     email:'/auth/google', youtube:'/auth/google/youtube',
@@ -1167,9 +1184,10 @@ render();
         state.drafts[nm.id] = e.draft || generateDraft(nm);
         added++;
       });
+      window.__loading = false;
       if(state.view !== 'inbox') setView('inbox'); else render();
       toast(added ? `${added} new message${added>1?'s':''} came in` : 'No new messages right now');
-    }catch(err){ toast('Could not reach your inbox'); }
+    }catch(err){ window.__loading = false; render(); toast('Could not reach your inbox'); }
   };
 
   // 3) Approving a REAL email actually sends it through Gmail
