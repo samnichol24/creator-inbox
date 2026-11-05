@@ -29,6 +29,63 @@ app.use(session({
   saveUninitialized: false,
   cookie: { maxAge: 30 * 24 * 3600 * 1000, secure: 'auto', sameSite: 'lax' }
 }));
+app.use(express.urlencoded({ extended: false })); // parse the login form POST
+
+// ---------- Portal login gate ----------
+// Optional: when PORTAL_USERS is set in the environment (format
+// "sam:pass1,assistant:pass2"), the whole portal requires a login. Until it's
+// set the portal stays open, so deploying this never locks anyone out. Add or
+// remove people — or change passwords to revoke access — by editing PORTAL_USERS.
+function portalUsers() {
+  const map = {};
+  for (const pair of (process.env.PORTAL_USERS || '').split(',')) {
+    const i = pair.indexOf(':');
+    if (i > 0) map[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
+  }
+  return map;
+}
+const loginOn = () => Object.keys(portalUsers()).length > 0;
+
+const LOGIN_PAGE = (err) => `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Creator Inbox — Sign in</title><style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;
+font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0e1016;color:#e8eaf0}
+.card{width:340px;max-width:90vw;background:#171a23;border:1px solid #262b38;border-radius:16px;padding:30px 28px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+h1{font-size:19px;margin:0 0 4px}.sub{margin:0 0 22px;color:#8b93a7;font-size:13px}
+label{display:block;font-size:12px;color:#8b93a7;margin:14px 0 6px}
+input{width:100%;padding:11px 13px;border-radius:10px;border:1px solid #2b3140;background:#0e1016;color:#e8eaf0;font-size:14px}
+input:focus{outline:none;border-color:#6366f1}
+button{width:100%;margin-top:20px;padding:12px;border:0;border-radius:10px;background:#6366f1;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+button:hover{filter:brightness(1.08)}
+.err{background:#3a1d22;border:1px solid #5b2a31;color:#f1a7ae;font-size:12.5px;padding:9px 12px;border-radius:9px;margin-top:16px}
+.logo{width:34px;height:34px;border-radius:9px;background:#6366f1;display:grid;place-items:center;margin-bottom:16px;font-weight:700;color:#fff}
+</style></head><body>
+<form class="card" method="post" action="/login">
+<div class="logo">CI</div><h1>Creator Inbox</h1><p class="sub">Sign in to your inbox</p>
+<label>Username</label><input name="username" autocomplete="username" autofocus>
+<label>Password</label><input name="password" type="password" autocomplete="current-password">
+${err ? '<div class="err">Wrong username or password.</div>' : ''}
+<button type="submit">Sign in</button>
+</form></body></html>`;
+
+app.get('/login', (req, res) => res.type('html').send(LOGIN_PAGE(req.query.e)));
+app.post('/login', (req, res) => {
+  const users = portalUsers();
+  const { username, password } = req.body || {};
+  if (username && users[username] !== undefined && users[username] === password) {
+    req.session.user = username;
+    return res.redirect('/');
+  }
+  res.redirect('/login?e=1');
+});
+
+// Gate everything below once PORTAL_USERS is configured.
+app.use((req, res, next) => {
+  if (!loginOn() || req.session?.user) return next();
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Please sign in.' });
+  res.redirect('/login');
+});
 
 // --- in-memory store, backed by the database (see initStore) ---
 // Every platform now holds an ARRAY of connected accounts, so one inbox can
@@ -242,7 +299,7 @@ app.get('/auth/discord', (req, res) => {
 });
 
 app.get('/logout', (req, res) => {
-  req.session.destroy(() => res.redirect('/'));
+  req.session.destroy(() => res.redirect('/login'));
 });
 
 // ---------- API ----------
