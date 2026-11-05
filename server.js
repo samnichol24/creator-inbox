@@ -107,8 +107,24 @@ const store = {
   discord: [],
   tone: { name: 'Sam', samples: '', signoff: '', emojis: '🙌 ✨ 💜 🔥' },
   cache: [],
-  replied: new Set()
+  replied: new Set(),
+  brands: {} // acctId -> brandId override (e.g. "instagram:178...": "ignite")
 };
+
+// ---- Brands: let Sam keep "Sam Nicholson Music" and "Ignite Music Marketing"
+// separate so the two never get mixed up in the inbox. Every account belongs to
+// a brand; the brand is guessed from the account name and can be overridden per
+// account (stored in store.brands and persisted under the 'brands' db key).
+const BRANDS = { sam: 'Sam Nicholson Music', ignite: 'Ignite Music Marketing' };
+function brandOf(platform, account) {
+  const id = acctId(platform, account);
+  if (store.brands[id] && BRANDS[store.brands[id]]) return store.brands[id];
+  // Heuristic: anything mentioning "ignite" is the Ignite brand; everything else
+  // defaults to Sam Nicholson Music.
+  const hay = [account.pageName, account.channel, account.username, account.email, account.name]
+    .filter(Boolean).join(' ').toLowerCase();
+  return /ignite/.test(hay) ? 'ignite' : 'sam';
+}
 
 // Each account gets a stable id + a human label, used to tag every message so
 // the inbox can show "from @ignitemymusic" and /api/send can route the reply
@@ -208,6 +224,7 @@ async function initStore() {
 
   if (saved.tone) store.tone = { ...store.tone, ...saved.tone };
   if (Array.isArray(saved.replied)) store.replied = new Set(saved.replied);
+  if (saved.brands && typeof saved.brands === 'object') store.brands = saved.brands;
 
   // Roll the 60-day Instagram/Threads tokens forward (per account) and persist.
   let igChanged = false, thChanged = false;
@@ -307,7 +324,12 @@ app.get('/logout', (req, res) => {
 // the UI can show them and offer "add another". Legacy booleans/names are kept
 // so the existing front-end keeps working unchanged.
 function accountList(platform) {
-  return store[platform].map(a => ({ id: acctId(platform, a), label: LABEL[platform](a) }));
+  return store[platform].map(a => ({
+    id: acctId(platform, a),
+    label: LABEL[platform](a),
+    brand: brandOf(platform, a),
+    brandLabel: BRANDS[brandOf(platform, a)]
+  }));
 }
 app.get('/api/status', (req, res) => {
   const email = accountList('email');
@@ -318,6 +340,7 @@ app.get('/api/status', (req, res) => {
   const discord = accountList('discord');
   res.json({
     accounts: { email, youtube, instagram, facebook, threads, discord },
+    brands: Object.entries(BRANDS).map(([id, label]) => ({ id, label })),
     // --- back-compat fields (first account of each) ---
     connected: email.length > 0, email: email[0]?.label || null,
     ytConnected: youtube.length > 0, ytName: youtube[0]?.label || null,
@@ -343,6 +366,15 @@ app.post('/api/disconnect', (req, res) => {
   res.json({ ok: true, removed: before - store[platform].length });
 });
 
+// Assign one account to a brand.  { acct: "instagram:178...", brand: "ignite" }
+app.post('/api/brand', (req, res) => {
+  const { acct, brand } = req.body || {};
+  if (!acct || !BRANDS[brand]) return res.status(400).json({ error: 'Need acct + valid brand' });
+  store.brands[acct] = brand;
+  db.save('brands', store.brands);
+  res.json({ ok: true });
+});
+
 app.post('/api/tone', (req, res) => {
   store.tone = { ...store.tone, ...(req.body || {}) };
   db.save('tone', store.tone);
@@ -360,7 +392,12 @@ app.get('/api/messages', async (req, res) => {
       if (!Array.isArray(arr)) return;
       const id = acctId(platform, account);
       const label = LABEL[platform](account);
-      for (const it of arr) { it.acct = id; it.acctLabel = label; items.push(it); }
+      const brand = brandOf(platform, account);
+      for (const it of arr) {
+        it.acct = id; it.acctLabel = label;
+        it.brand = brand; it.brandLabel = BRANDS[brand];
+        items.push(it);
+      }
     };
 
     for (const a of store.email) {
@@ -368,7 +405,9 @@ app.get('/api/messages', async (req, res) => {
       catch (e) { console.error('gmail error', a.email, e.message); }
     }
     for (const a of store.youtube) {
-      try { tag(await listRecentComments({ refresh_token: a.refresh_token }, 90), 'youtube', a); }
+      // 365-day window so older comments across all videos are pulled in, not
+      // just the last few months.
+      try { tag(await listRecentComments({ refresh_token: a.refresh_token }, 365), 'youtube', a); }
       catch (e) { console.error('youtube error', a.channel, e.message); }
     }
     for (const a of store.instagram) {
@@ -396,6 +435,40 @@ app.get('/api/messages', async (req, res) => {
     console.error('list error', e.message);
     res.status(500).json({ error: 'Could not fetch messages. Try reconnecting.' });
   }
+});
+
+// ---------- Diagnostics ----------
+// Signed-in health check: runs each platform's fetch per connected account and
+// reports ok/count/error — WITHOUT exposing any tokens or message text — so a
+// broken connection (e.g. Instagram DMs) can be pinpointed fast. Just visit
+// /api/diag while signed in to the portal.
+app.get('/api/diag', async (req, res) => {
+  const probe = async (fn) => {
+    try { const r = await fn(); return { ok: true, count: Array.isArray(r) ? r.length : 0 }; }
+    catch (e) { return { ok: false, error: (e && e.message ? e.message : String(e)).slice(0, 300) }; }
+  };
+  const out = { brands: BRANDS, accounts: [] };
+  for (const a of store.email)
+    out.accounts.push({ platform: 'email', label: LABEL.email(a), brand: brandOf('email', a),
+      emails: await probe(() => listRecentEmails({ refresh_token: a.refresh_token }, 50)) });
+  for (const a of store.youtube)
+    out.accounts.push({ platform: 'youtube', label: LABEL.youtube(a), brand: brandOf('youtube', a),
+      comments: await probe(() => listRecentComments({ refresh_token: a.refresh_token }, 365)) });
+  for (const a of store.instagram)
+    out.accounts.push({ platform: 'instagram', label: LABEL.instagram(a), brand: brandOf('instagram', a),
+      comments: await probe(() => ig.listComments(a.token)),
+      dms: await probe(() => ig.listDMs(a.token)) });
+  for (const a of store.facebook)
+    out.accounts.push({ platform: 'facebook', label: LABEL.facebook(a), brand: brandOf('facebook', a),
+      comments: await probe(() => fb.listComments(a.pageToken, a.pageId)),
+      messenger: await probe(() => fb.listMessenger(a.pageToken, a.pageId)) });
+  for (const a of store.threads)
+    out.accounts.push({ platform: 'threads', label: LABEL.threads(a), brand: brandOf('threads', a),
+      replies: await probe(() => th.listReplies(a.token)) });
+  for (const a of store.discord)
+    out.accounts.push({ platform: 'discord', label: LABEL.discord(a), brand: brandOf('discord', a),
+      messages: await probe(() => dc.listMessages(a.botToken)) });
+  res.json(out);
 });
 
 app.post('/api/send', async (req, res) => {
