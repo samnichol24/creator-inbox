@@ -755,7 +755,7 @@ function renderBrandBar(){
   for(const b of brands)html+=chip(b.id,b.label,BRAND_COLORS[b.id]||'#888');
   bar.innerHTML=html;
 }
-function setBrand(id){state.brand=id;renderBrandBar();render();}
+function setBrand(id){state.brand=id;renderBrandBar();if(state.view==='fans')renderFans();else render();}
 // Move one connected account to the other brand (persists to the server).
 async function cycleAcctBrand(platform, acctId){
   const arr=(window.LIVE_ACCOUNTS&&window.LIVE_ACCOUNTS[platform])||[];
@@ -788,7 +788,7 @@ function setView(v){
   document.getElementById('approveAllBtn').style.display=isInbox?'':'none';
   if(v==='inbox'){render();}
   else if(v==='analytics'){document.getElementById('topTitle').textContent='Analytics';document.getElementById('topSub').textContent='Message volume & growth';renderAnalytics();}
-  else if(v==='fans'){document.getElementById('topTitle').textContent='Fans';document.getElementById('topSub').textContent='Your most engaged people';renderFans();}
+  else if(v==='fans'){document.getElementById('topTitle').textContent='Fans';document.getElementById('topSub').textContent='Your most engaged people';renderBrandBar();renderFans();}
   else if(v==='connect'){document.getElementById('topTitle').textContent='Connections';document.getElementById('topSub').textContent='Link your platforms';renderConnect();}
   else{document.getElementById('topTitle').textContent='Tone Sheet';document.getElementById('topSub').textContent='Teach the portal how you talk';renderTone();}
 }
@@ -917,6 +917,7 @@ function fanProfileUrl(ch,handle,name){
   const u=handleUser(handle);
   switch(ch){
     case 'ig-dm': case 'ig-cmt': return 'https://instagram.com/'+u;
+    case 'threads': return 'https://www.threads.net/@'+u;
     case 'yt-cmt': return 'https://youtube.com/@'+u;
     case 'tt-cmt': case 'tt-dm': return 'https://tiktok.com/@'+u;
     case 'snap-cmt': return 'https://snapchat.com/add/'+u;
@@ -934,26 +935,66 @@ function openFan(ch,handle,name){
   toast(`Opening ${name} on ${platformShort(ch)}…`);
 }
 function jsAttr(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
+// Generic/placeholder authors that aren't a real identifiable person — never
+// treat these as a "fan" (they'd otherwise merge thousands of anonymous people).
+const GENERIC_FAN=new Set(['facebook user','instagram user','youtube viewer','messenger','instagram dm','facebook','instagram','threads','discord','email','unknown','']);
+// Build the Top Fans list from REAL inbox data: aggregate every real comment and
+// DM by the person who sent it. (Demo items have no gid, so they're skipped.)
+// Note: DM channels surface one item per conversation, so DM counts reflect
+// conversations/threads, while comment counts are exact per-comment totals.
+function buildLiveFans(brandFilter){
+  const map=new Map();
+  for(const m of MESSAGES){
+    if(!m.gid) continue;                 // real items only
+    if(brandFilter&&brandFilter!=='all'&&m.brand!==brandFilter) continue;
+    const rawHandle=(m.handle||'').trim();
+    const rawName=(m.name||'').trim();
+    const key=(rawHandle||rawName).toLowerCase().replace(/^@/,'');
+    if(!key||GENERIC_FAN.has(key)||GENERIC_FAN.has(rawName.toLowerCase())) continue;
+    let f=map.get(key);
+    if(!f){f={name:rawName||rawHandle,handle:rawHandle||rawName,chCounts:{},dms:0,comments:0};map.set(key,f);}
+    const type=(CH[m.ch]&&CH[m.ch].type)||'comment';
+    if(type==='dm')f.dms++;else f.comments++;
+    f.chCounts[m.ch]=(f.chCounts[m.ch]||0)+1;
+    if(rawName&&!f.name)f.name=rawName;
+    if(rawHandle&&(!f.handle||f.handle===f.name))f.handle=rawHandle;
+  }
+  return [...map.values()].map(f=>{
+    let ch='email',best=-1;
+    for(const c in f.chCounts){if(f.chCounts[c]>best){best=f.chCounts[c];ch=c;}}
+    return {name:f.name,handle:f.handle,ch,dms:f.dms,comments:f.comments};
+  });
+}
 function renderFans(){
   const p=document.getElementById('fansPage');
   const sort=state.fanSort;
-  const ranked=FANS.map(f=>({...f,total:f.dms+f.comments,val:metricOf(f,sort)})).sort((a,b)=>b.val-a.val);
-  const max=ranked[0].val||1;
-  const totalAll=FANS.reduce((a,f)=>a+f.dms+f.comments,0);
-  const top=ranked[0];
   const metricWord={all:'total messages',dms:'DMs',comments:'comments'}[sort];
+  const source=window.__live?buildLiveFans(state.brand):FANS;
+  if(window.__live&&!source.length){
+    p.innerHTML=`<div class="wrap">
+      <div class="page-head"><h2>Top Fans</h2><p>Your most engaged people, ranked by how much they interact with you across every platform.</p></div>
+      <div class="card"><div class="empty" style="padding:56px 24px"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><div><b>Gathering your fans…</b><br/>Once your inbox finishes pulling comments and DMs, your top fans show up here. Hit Refresh if this doesn't fill in.</div></div></div>
+    </div>`;
+    return;
+  }
+  const rankedAll=source.map(f=>({...f,total:f.dms+f.comments,val:metricOf(f,sort)})).sort((a,b)=>b.val-a.val);
+  const ranked=rankedAll.slice(0,50);
+  const max=(ranked[0]&&ranked[0].val)||1;
+  const totalAll=source.reduce((a,f)=>a+f.dms+f.comments,0);
+  const top=rankedAll[0];
+  const moreNote=rankedAll.length>ranked.length?` · showing top ${ranked.length} of ${fmtInt(rankedAll.length)}`:'';
   p.innerHTML=`<div class="wrap">
     <div class="page-head"><h2>Top Fans</h2><p>Your most engaged people, ranked by how much they interact with you across every platform. Switch between total messages, DMs, and comments to see who's showing up the most — and click any fan to open their profile on that platform.</p></div>
 
     <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
-      <div class="kpi"><div class="l">Fans tracked</div><div class="n">${fmtInt(FANS.length)}</div><div class="sub">people who've reached out</div></div>
+      <div class="kpi"><div class="l">Fans tracked</div><div class="n">${fmtInt(source.length)}</div><div class="sub">people who've reached out</div></div>
       <div class="kpi"><div class="l">Total interactions</div><div class="n">${fmtInt(totalAll)}</div><div class="sub">DMs + comments, all time</div></div>
       <div class="kpi"><div class="l">Your #1 fan</div><div class="n" style="font-size:18px;margin-top:10px;display:flex;align-items:center;gap:8px"><span class="ico" style="width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:${CH[top.ch].bg}">${colorGlyph(CH[top.ch])}</span>${escapeHtml(top.name)}</div><div class="sub">${fmtInt(top.total)} interactions</div></div>
     </div>
 
     <div class="fan-controls">
       <div class="seg">${[['all','Total'],['dms','DMs'],['comments','Comments']].map(([k,l])=>`<button class="${sort===k?'active':''}" onclick="setFanSort('${k}')">${l}</button>`).join('')}</div>
-      <div class="spacer"></div><span style="font-size:12px;color:var(--txt-3)">Ranked by ${metricWord}</span>
+      <div class="spacer"></div><span style="font-size:12px;color:var(--txt-3)">Ranked by ${metricWord}${moreNote}</span>
     </div>
 
     <div class="card">
@@ -1235,13 +1276,16 @@ render();
         if(MESSAGES.find(x=>x.gid === e.gid)) return; // already have it
         const nm = { id: idc++, ch: e.ch || 'email', name:e.name, handle:e.handle, text:e.text,
                      intent:'question', topic:'', time:e.time, live:true, gid:e.gid,
-                     threadId:e.threadId, subject:e.subject, acct:e.acct, acctLabel:e.acctLabel };
+                     threadId:e.threadId, subject:e.subject, acct:e.acct, acctLabel:e.acctLabel,
+                     brand:e.brand, brandLabel:e.brandLabel };
         MESSAGES.unshift(nm);
         state.drafts[nm.id] = e.draft || generateDraft(nm);
         added++;
       });
       window.__loading = false;
-      if(state.view !== 'inbox') setView('inbox'); else render();
+      if(state.view === 'fans') renderFans();
+      else if(state.view !== 'inbox') setView('inbox');
+      else render();
       toast(added ? `${added} new message${added>1?'s':''} came in` : 'No new messages right now');
     }catch(err){ window.__loading = false; render(); toast('Could not reach your inbox'); }
   };
