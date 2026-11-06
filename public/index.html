@@ -355,6 +355,9 @@
       <button class="nav-btn" data-view="fans" onclick="setView('fans')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15a4 4 0 100-8 4 4 0 000 8z"/><path d="M5 21a7 7 0 0114 0"/><path d="M17 4l1.2 2.4L21 7l-2 1.8.4 2.7L17 10l-2.4 1.5.4-2.7-2-1.8 2.8-.6z" style="display:none"/></svg>Fans
       </button>
+      <button class="nav-btn" data-view="activity" onclick="setView('activity')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>Activity
+      </button>
       <button class="nav-btn" data-view="connect" onclick="setView('connect')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 7H6a3 3 0 000 6h3M15 7h3a3 3 0 010 6h-3M8 10h8"/></svg>Connections
       </button>
@@ -409,6 +412,7 @@
     <div class="page hidden" id="analyticsPage"></div>
     <div class="page hidden" id="tonePage"></div>
     <div class="page hidden" id="fansPage"></div>
+    <div class="page hidden" id="activityPage"></div>
     <div class="page hidden" id="connectPage"></div>
   </main>
 </div>
@@ -535,7 +539,10 @@ function injectPhrase(text,m){const p=tone.phrases.split(/[\n,]/).map(s=>s.trim(
 function generateDraft(m){let g=greetingFor(m),b=pick(bodyFor(m),m.id);b=injectPhrase(b,m);let full=g+b;if(tone.vibe==='pro')full=full.charAt(0).toUpperCase()+full.slice(1);full=applyEmoji(full,m);full=full+signature();return full.trim();}
 
 /* ============ STATE ============ */
-let state={view:'inbox',channel:'all',typeFilter:'all',brand:'all',search:'',selected:null,drafts:{},sent:{},gran:'day',fanSort:'all',connections:{}};
+let state={view:'inbox',channel:'all',typeFilter:'all',brand:'all',search:'',selected:null,drafts:{},sent:{},gran:'day',fanSort:'all',actPerson:'all',connections:{}};
+// Viewer's local calendar day (YYYY-MM-DD) — anchors stats to their timezone.
+function localYMD(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+window.STATS={volume:{},responses:{},accounts:{}};
 MESSAGES.forEach(m=>{state.drafts[m.id]=generateDraft(m);});
 
 /* ============ ANALYTICS DATA (deterministic mock) ============ */
@@ -581,6 +588,25 @@ function parseDaysAgo(timeStr){
 // of the mock when the app is live.
 function buildLiveHistory(brandFilter){
   const span=180, today=new Date(); today.setHours(0,0,0,0);
+  const vol=(window.STATS&&window.STATS.volume)||{};
+  const accts=(window.STATS&&window.STATS.accounts)||{};
+  const out=[];
+  if(Object.keys(vol).length){
+    // Primary source: the accumulated, persisted daily history (survives ageing).
+    for(let i=span-1;i>=0;i--){
+      const date=new Date(today.getTime()-i*DAY_MS);
+      const day=vol[localYMD(date)]||{};
+      const counts={}; let total=0;
+      for(const acct in day){
+        const brand=(accts[acct]&&accts[acct].brand)||(acct.indexOf('ignite')>=0?'ignite':'sam');
+        if(brandFilter&&brandFilter!=='all'&&brand!==brandFilter) continue;
+        for(const ch in day[acct]){ const n=day[acct][ch]; counts[ch]=(counts[ch]||0)+n; total+=n; }
+      }
+      out.push({date,counts,total});
+    }
+    return out;
+  }
+  // Fallback (before any history is recorded): derive from messages in memory.
   const perDay={};
   for(const m of MESSAGES){
     if(!m.gid) continue;
@@ -591,8 +617,7 @@ function buildLiveHistory(brandFilter){
     perDay[d].counts[m.ch]=(perDay[d].counts[m.ch]||0)+1;
     perDay[d].total++;
   }
-  const out=[];
-  for(let i=span-1;i>=0;i--){               // oldest first, today last
+  for(let i=span-1;i>=0;i--){
     const date=new Date(today.getTime()-i*DAY_MS);
     const dc=perDay[i]||{counts:{},total:0};
     out.push({date,counts:dc.counts,total:dc.total});
@@ -788,7 +813,7 @@ function renderBrandBar(){
   for(const b of brands)html+=chip(b.id,b.label,BRAND_COLORS[b.id]||'#888');
   bar.innerHTML=html;
 }
-function setBrand(id){state.brand=id;renderBrandBar();if(state.view==='fans')renderFans();else if(state.view==='analytics')renderAnalytics();else render();}
+function setBrand(id){state.brand=id;renderBrandBar();if(state.view==='fans')renderFans();else if(state.view==='analytics')renderAnalytics();else if(state.view==='activity')renderActivity();else render();}
 // Move one connected account to the other brand (persists to the server).
 async function cycleAcctBrand(platform, acctId){
   const arr=(window.LIVE_ACCOUNTS&&window.LIVE_ACCOUNTS[platform])||[];
@@ -815,6 +840,7 @@ function setView(v){
   document.getElementById('analyticsPage').classList.toggle('hidden',v!=='analytics');
   document.getElementById('tonePage').classList.toggle('hidden',v!=='tone');
   document.getElementById('fansPage').classList.toggle('hidden',v!=='fans');
+  document.getElementById('activityPage').classList.toggle('hidden',v!=='activity');
   document.getElementById('connectPage').classList.toggle('hidden',v!=='connect');
   document.getElementById('searchWrap').style.visibility=isInbox?'visible':'hidden';
   document.getElementById('regenAllBtn').style.display=isInbox?'':'none';
@@ -822,6 +848,7 @@ function setView(v){
   if(v==='inbox'){render();}
   else if(v==='analytics'){document.getElementById('topTitle').textContent='Analytics';document.getElementById('topSub').textContent='Message volume & growth';renderBrandBar();renderAnalytics();}
   else if(v==='fans'){document.getElementById('topTitle').textContent='Fans';document.getElementById('topSub').textContent='Your most engaged people';renderBrandBar();renderFans();}
+  else if(v==='activity'){document.getElementById('topTitle').textContent='Activity';document.getElementById('topSub').textContent='Replies sent, per day & person';renderBrandBar();renderActivity();}
   else if(v==='connect'){document.getElementById('topTitle').textContent='Connections';document.getElementById('topSub').textContent='Link your platforms';renderConnect();}
   else{document.getElementById('topTitle').textContent='Tone Sheet';document.getElementById('topSub').textContent='Teach the portal how you talk';renderTone();}
 }
@@ -932,6 +959,117 @@ function arrow(v){return v>=0
   ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M9 7h8v8"/></svg>'
   :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 7l10 10M15 17H7V9"/></svg>';}
 function setGran(g){state.gran=g;renderAnalytics();}
+
+/* ============ ACTIVITY (response tracker) ============ */
+function actAcctMeta(acct){const a=(window.STATS.accounts||{})[acct]||{};return {label:a.label||acct,brand:a.brand||(acct.indexOf('ignite')>=0?'ignite':'sam'),platform:a.platform||String(acct).split(':')[0]};}
+function platIcon(platform){const ch={email:'email',youtube:'yt-cmt',instagram:'ig-cmt',facebook:'fb-cmt',threads:'threads',discord:'discord'}[platform]||'email';const c=CH[ch];return `<span class="ico" style="background:${c.bg}">${colorGlyph(c)}</span>`;}
+function platName(platform){return {email:'Email',youtube:'YouTube',instagram:'Instagram',facebook:'Facebook',threads:'Threads',discord:'Discord'}[platform]||platform;}
+function collectResponses(brandFilter,person){
+  const R=(window.STATS&&window.STATS.responses)||{};
+  const byDate={},byAcct={},byUser={},byPlat={},users=new Set();let total=0;
+  for(const dk in R){for(const acct in R[dk]){
+    const meta=actAcctMeta(acct);
+    if(brandFilter&&brandFilter!=='all'&&meta.brand!==brandFilter)continue;
+    for(const user in R[dk][acct]){
+      users.add(user);
+      if(person&&person!=='all'&&user!==person)continue;
+      const v=R[dk][acct][user];const c=v.c||0,d=v.d||0,tot=c+d;if(!tot)continue;
+      (byDate[dk]=byDate[dk]||{c:0,d:0,total:0});byDate[dk].c+=c;byDate[dk].d+=d;byDate[dk].total+=tot;
+      (byAcct[acct]=byAcct[acct]||{c:0,d:0,total:0});byAcct[acct].c+=c;byAcct[acct].d+=d;byAcct[acct].total+=tot;
+      (byUser[user]=byUser[user]||{c:0,d:0,total:0});byUser[user].c+=c;byUser[user].d+=d;byUser[user].total+=tot;
+      (byPlat[meta.platform]=byPlat[meta.platform]||{c:0,d:0,total:0});byPlat[meta.platform].c+=c;byPlat[meta.platform].d+=d;byPlat[meta.platform].total+=tot;
+      total+=tot;
+    }
+  }}
+  return {byDate,byAcct,byUser,byPlat,users:[...users],total};
+}
+function setActPerson(u){state.actPerson=u;renderActivity();}
+function renderActivity(){
+  const p=document.getElementById('activityPage');
+  const head=`<div class="page-head"><h2>Response activity</h2><p>Every reply you and your team send from the inbox is counted here automatically — by day, by platform, by account, and by person. No manual tallying.</p></div>`;
+  const allUsers=collectResponses(state.brand,'all').users.sort();
+  const data=collectResponses(state.brand,state.actPerson);
+  const personChips=`<div class="brandbar" style="padding-left:0;padding-right:0;border:0;background:none">
+    <span class="blab">Who</span>
+    <button class="bchip ${state.actPerson==='all'?'active':''}" ${state.actPerson==='all'?'style="background:var(--txt);color:var(--surface);border-color:transparent"':''} onclick="setActPerson('all')">Everyone</button>
+    ${allUsers.map(u=>`<button class="bchip ${state.actPerson===u?'active':''}" ${state.actPerson===u?'style="background:var(--accent);color:#fff;border-color:transparent"':''} onclick="setActPerson('${jsAttr(u)}')">${escapeHtml(u)}</button>`).join('')}
+  </div>`;
+  if(data.total===0){
+    p.innerHTML=`<div class="wrap">${head}${allUsers.length?personChips:''}
+      <div class="card"><div class="empty" style="padding:56px 24px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><div><b>No replies tracked yet</b><br/>As you and your team reply to comments and DMs from the inbox, each one is tallied here by day, platform, account, and person.${state.actPerson!=='all'?' Nothing for this person yet — try “Everyone”.':''}</div></div></div></div>`;
+    return;
+  }
+  const DAY=86400000,today=new Date();today.setHours(0,0,0,0);
+  const days=[];for(let i=13;i>=0;i--){const dt=new Date(today.getTime()-i*DAY);const d=data.byDate[localYMD(dt)]||{total:0,c:0,d:0};days.push({dt,label:(dt.getMonth()+1)+'/'+dt.getDate(),full:dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}),...d});}
+  const maxDay=Math.max(...days.map(d=>d.total),1);
+  const dow=(today.getDay()+6)%7,monday=new Date(today.getTime()-dow*DAY);
+  const WK=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const week=WK.map((lb,i)=>{const dt=new Date(monday.getTime()+i*DAY);const d=data.byDate[localYMD(dt)]||{total:0,c:0,d:0};return {label:lb,isToday:localYMD(dt)===localYMD(today),isFuture:dt>today,...d};});
+  const weekTotal=week.reduce((a,d)=>a+d.total,0);
+  const todayTotal=(data.byDate[localYMD(today)]||{total:0}).total;
+  const fullByUser=collectResponses(state.brand,'all').byUser;
+  const userRows=Object.entries(fullByUser).map(([u,v])=>({u,...v})).sort((a,b)=>b.total-a.total);
+  const topResponder=userRows[0];
+  const acctRows=Object.entries(data.byAcct).map(([acct,v])=>({acct,...v})).sort((a,b)=>b.total-a.total);
+  const acctMax=acctRows[0]?acctRows[0].total:1;
+  const platRows=Object.entries(data.byPlat).map(([pf,v])=>({pf,...v})).sort((a,b)=>b.total-a.total);
+  const pfTop=platRows[0];
+  const whoLabel=state.actPerson==='all'?'everyone':state.actPerson;
+  p.innerHTML=`<div class="wrap">${head}${personChips}
+    <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><div class="l">Replies this week</div><div class="n">${fmtInt(weekTotal)}</div><div class="sub">Mon–Sun · ${escapeHtml(whoLabel)}</div></div>
+      <div class="kpi"><div class="l">Replies today</div><div class="n">${fmtInt(todayTotal)}</div><div class="sub">so far today</div></div>
+      <div class="kpi"><div class="l">Top responder</div><div class="n" style="font-size:18px;margin-top:10px">${topResponder?escapeHtml(topResponder.u):'—'}</div><div class="sub">${topResponder?fmtInt(topResponder.total)+' all-time':'—'}</div></div>
+      <div class="kpi"><div class="l">Busiest platform</div><div class="n" style="font-size:16px;margin-top:10px;display:flex;align-items:center;gap:8px">${pfTop?platIcon(pfTop.pf):''}${pfTop?platName(pfTop.pf):'—'}</div><div class="sub">${pfTop?fmtInt(pfTop.total)+' replies':''}</div></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="ch-head"><h4>Replies per day</h4><span class="ch-sub">last 14 days · ${escapeHtml(whoLabel)}</span></div>
+      <div class="bars">
+        ${days.map(d=>`<div class="bar-col">
+          <div class="bar-tip"><b>${fmtInt(d.total)}</b><br/>${d.full}${d.total?`<br/><span style="color:var(--txt-3)">${fmtInt(d.c)} comments · ${fmtInt(d.d)} DMs</span>`:''}</div>
+          <div class="bar" style="height:${Math.round(d.total/maxDay*100)}%"></div>
+          <div class="bar-x">${d.label}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="ch-head"><h4>This week</h4><span class="ch-sub">Mon–Sun · ${fmtInt(weekTotal)} replies</span></div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:6px">
+        ${week.map(d=>`<div style="text-align:center;padding:12px 4px;border:1px solid var(--line);border-radius:12px;background:${d.isToday?'var(--accent-soft)':'var(--surface)'};opacity:${d.isFuture?.45:1}">
+          <div style="font-size:11px;color:var(--txt-3);font-weight:600">${d.label}</div>
+          <div style="font-size:22px;font-weight:700;margin:4px 0;color:${d.isToday?'var(--accent)':'var(--txt)'}">${d.isFuture?'·':fmtInt(d.total)}</div>
+          <div style="font-size:10.5px;color:var(--txt-3)">${d.total?`${fmtInt(d.c)}c · ${fmtInt(d.d)}d`:'—'}</div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="ch-head"><h4>By account</h4><span class="ch-sub">all-time · ${escapeHtml(whoLabel)}</span></div>
+      <div class="platform-list">
+        ${acctRows.map(r=>{const m=actAcctMeta(r.acct);const bcol=BRAND_COLORS[m.brand]||'#888';return `<div class="pf-row">
+          ${platIcon(m.platform)}
+          <span class="pf-name">${escapeHtml(m.label)} <span style="color:${bcol};font-size:11px">●</span></span>
+          <span class="pf-track"><span class="pf-fill" style="width:${Math.round(r.total/acctMax*100)}%"></span></span>
+          <span class="pf-val"><b>${fmtInt(r.total)}</b> <span>${fmtInt(r.c)} cmts · ${fmtInt(r.d)} DMs</span></span>
+        </div>`;}).join('')}
+      </div>
+    </div>
+
+    ${state.actPerson==='all'&&userRows.length>1?`<div class="chart-card">
+      <div class="ch-head"><h4>By person</h4><span class="ch-sub">all-time</span></div>
+      <div class="platform-list">
+        ${userRows.map(r=>{const mx=userRows[0].total||1;return `<div class="pf-row">
+          <span class="fan-av" style="width:28px;height:28px;background:${avatarColor(r.u)};font-size:11px">${initials(r.u)}</span>
+          <span class="pf-name">${escapeHtml(r.u)}</span>
+          <span class="pf-track"><span class="pf-fill" style="width:${Math.round(r.total/mx*100)}%"></span></span>
+          <span class="pf-val"><b>${fmtInt(r.total)}</b> <span>${fmtInt(r.c)} cmts · ${fmtInt(r.d)} DMs</span></span>
+        </div>`;}).join('')}
+      </div>
+    </div>`:''}
+  </div>`;
+}
 
 /* ============ FANS ============ */
 const FANS=[
@@ -1238,6 +1376,12 @@ render();
                      status.fbConnected || status.thConnected || status.dcConnected);
   window.BRANDS = status.brands || [];
 
+  // Pull the persistent stats (accumulated volume history + response log).
+  window.fetchStats = async function(){
+    try { window.STATS = await fetch('/api/stats').then(r=>r.json()); } catch(e){}
+  };
+  await window.fetchStats();
+
   // When the app is live, the hardcoded demo messages must never show. Clear
   // them out up front and show a loading state until the real pull finishes.
   if(window.__live){
@@ -1311,7 +1455,8 @@ render();
     setTimeout(()=>btn && btn.classList.remove('spin'), 600);
     if(!window.__live) return origRefresh();
     try{
-      const emails = await fetch('/api/messages').then(r=>r.json());
+      const emails = await fetch('/api/messages?today='+encodeURIComponent(localYMD())).then(r=>r.json());
+      window.fetchStats && window.fetchStats(); // refresh recorded history after the pull
       let added = 0;
       emails.forEach(e=>{
         if(MESSAGES.find(x=>x.gid === e.gid)) return; // already have it
@@ -1326,6 +1471,7 @@ render();
       window.__loading = false;
       if(state.view === 'fans') renderFans();
       else if(state.view === 'analytics') renderAnalytics();
+      else if(state.view === 'activity') renderActivity();
       else if(state.view !== 'inbox') setView('inbox');
       else render();
       toast(added ? `${added} new message${added>1?'s':''} came in` : 'No new messages right now');
@@ -1342,9 +1488,11 @@ render();
         try{
           const r = await fetch('/api/send', {
             method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ gid:m.gid, threadId:m.threadId, to:m.handle, text })
+            body: JSON.stringify({ gid:m.gid, threadId:m.threadId, to:m.handle, text, localDate: localYMD() })
           });
           if(!r.ok){ toast('Send failed — check the connection'); return; }
+          // Keep the Activity tracker current.
+          if(window.fetchStats){ window.fetchStats().then(()=>{ if(state.view==='activity') renderActivity(); }); }
         }catch(e){ toast('Send failed'); return; }
       }
       return fn(id);

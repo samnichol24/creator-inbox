@@ -132,8 +132,61 @@ const store = {
   tone: { name: 'Sam', samples: '', signoff: '', emojis: '🙌 ✨ 💜 🔥' },
   cache: [],
   replied: new Set(),
-  brands: {} // acctId -> brandId override (e.g. "instagram:178...": "ignite")
+  brands: {}, // acctId -> brandId override (e.g. "instagram:178...": "ignite")
+  // Persistent analytics so history survives even after messages age out:
+  volume: {},    // { 'YYYY-MM-DD': { acctId: { chId: peakCount } } } — messages RECEIVED
+  responses: {}  // { 'YYYY-MM-DD': { acctId: { user: { c, d } } } } — replies SENT by each person
 };
+
+// Which type each message channel is (comment vs dm), used for stats tallies.
+const CH_TYPE = {
+  'email': 'd', 'yt-cmt': 'c', 'ig-cmt': 'c', 'ig-dm': 'd',
+  'fb-cmt': 'c', 'fb-msgr': 'd', 'threads': 'c', 'discord': 'd'
+};
+// Turn a relative time label ("2h","5d","12w") into whole days ago.
+function relDaysAgo(s) {
+  const m = String(s || '').match(/^(\d+)\s*([mhdw])/i);
+  if (!m) return 0;
+  const n = +m[1], u = m[2].toLowerCase();
+  if (u === 'm' || u === 'h') return 0;
+  if (u === 'w') return n * 7;
+  return n;
+}
+function ymd(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+// Merge this pull's per-day/account/channel counts into the persistent history,
+// keeping the PEAK seen for each (a past day's count only shrinks as it ages out
+// of the pull window, so max() captures the true total while it was fresh).
+function recordVolume(items, todayStr) {
+  let base = new Date();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(todayStr || '')) { const [y, m, d] = todayStr.split('-').map(Number); base = new Date(y, m - 1, d); }
+  base.setHours(0, 0, 0, 0);
+  const cur = {};
+  for (const it of items) {
+    if (!it.acct || !it.ch) continue;
+    const d = new Date(base.getTime()); d.setDate(d.getDate() - relDaysAgo(it.time));
+    const dk = ymd(d);
+    const acctMap = (cur[dk] = cur[dk] || {});
+    const chMap = (acctMap[it.acct] = acctMap[it.acct] || {});
+    chMap[it.ch] = (chMap[it.ch] || 0) + 1;
+  }
+  let changed = false;
+  for (const dk in cur) for (const acct in cur[dk]) for (const ch in cur[dk][acct]) {
+    const n = cur[dk][acct][ch];
+    const prev = ((store.volume[dk] || {})[acct] || {})[ch] || 0;
+    if (n > prev) {
+      const am = (store.volume[dk] = store.volume[dk] || {});
+      (am[acct] = am[acct] || {})[ch] = n;
+      changed = true;
+    }
+  }
+  if (changed) {
+    const keys = Object.keys(store.volume).sort();            // keep ~200 days
+    for (let i = 0; i < keys.length - 200; i++) delete store.volume[keys[i]];
+    db.save('volume', store.volume);
+  }
+}
 
 // ---- Brands: let Sam keep "Sam Nicholson Music" and "Ignite Music Marketing"
 // separate so the two never get mixed up in the inbox. Every account belongs to
@@ -249,6 +302,8 @@ async function initStore() {
   if (saved.tone) store.tone = { ...store.tone, ...saved.tone };
   if (Array.isArray(saved.replied)) store.replied = new Set(saved.replied);
   if (saved.brands && typeof saved.brands === 'object') store.brands = saved.brands;
+  if (saved.volume && typeof saved.volume === 'object') store.volume = saved.volume;
+  if (saved.responses && typeof saved.responses === 'object') store.responses = saved.responses;
 
   // Roll the 60-day Instagram/Threads tokens forward (per account) and persist.
   let igChanged = false, thChanged = false;
@@ -453,6 +508,12 @@ app.get('/api/messages', async (req, res) => {
     const results = await Promise.all(tasks);
     for (const r of results) if (r) tag(r.arr, r.platform, r.account);
 
+    // ---- Record daily RECEIVED volume (peak per day/account/channel) so the
+    // analytics history accumulates and survives messages ageing out. Dates are
+    // anchored to the viewer's "today" (passed as ?today=YYYY-MM-DD) so the chart
+    // lines up with their local calendar.
+    recordVolume(items, req.query.today);
+
     items = items.filter(it => !store.replied.has(it.gid));
     // NOTE: drafts are generated on the client (instant), not here — pre-drafting
     // thousands of items server-side was slow and (with an AI key) impractical.
@@ -538,11 +599,43 @@ app.post('/api/send', async (req, res) => {
         });
     }
     if (gid) { store.replied.add(gid); db.save('replied', [...store.replied]); }
+    recordResponse(req, cached, account, platform);
     res.json({ ok: true });
   } catch (e) {
     console.error('send error', e.message);
     res.status(500).json({ error: 'Send failed: ' + e.message });
   }
+});
+
+// Log one sent reply against the person who sent it (Sam / Kim), the account,
+// the type (comment/dm) and the day — so the Activity page can show who answered
+// how many, per platform/account, without anyone tallying by hand.
+function recordResponse(req, cached, account, platform) {
+  try {
+    const user = req.session?.user || cookieUser(req) || 'someone';
+    const dk = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.localDate || '') ? req.body.localDate : ymd(new Date());
+    const acct = cached.acct || (account ? acctId(platform, account) : platform + ':?');
+    const type = CH_TYPE[cached.ch] === 'd' ? 'd' : 'c';
+    const day = (store.responses[dk] = store.responses[dk] || {});
+    const ac = (day[acct] = day[acct] || {});
+    const u = (ac[user] = ac[user] || { c: 0, d: 0 });
+    u[type]++;
+    // keep ~200 days
+    const keys = Object.keys(store.responses).sort();
+    for (let i = 0; i < keys.length - 200; i++) delete store.responses[keys[i]];
+    db.save('responses', store.responses);
+  } catch (e) { console.error('recordResponse', e.message); }
+}
+
+// Stats for the Analytics + Activity pages: accumulated received volume and the
+// per-person response log. Returns the accounts too (label/brand) so the client
+// can show friendly names.
+app.get('/api/stats', (req, res) => {
+  const accounts = {};
+  for (const platform of ['email', 'youtube', 'instagram', 'facebook', 'threads', 'discord'])
+    for (const a of store[platform])
+      accounts[acctId(platform, a)] = { label: LABEL[platform](a), brand: brandOf(platform, a), platform };
+  res.json({ volume: store.volume, responses: store.responses, accounts, brands: BRANDS });
 });
 
 // ---------- Privacy policy (required to publish the Meta/Google apps) ----------
