@@ -430,7 +430,8 @@ app.get('/api/status', (req, res) => {
     dcConnected: discord.length > 0, dcName: discord[0]?.label || null,
     hasGoogleKeys: hasGoogle, hasInstagramKeys: hasInstagram,
     hasFacebookKeys: hasFacebook, hasThreadsKeys: hasThreads,
-    hasDb: db.enabled(), hasAi: !!process.env.ANTHROPIC_API_KEY
+    hasDb: db.enabled(), hasAi: !!process.env.ANTHROPIC_API_KEY,
+    tone: store.tone // so the Tone Sheet + drafts reflect what was saved
   });
 });
 
@@ -626,6 +627,15 @@ function recordResponse(req, cached, account, platform) {
     db.save('responses', store.responses);
   } catch (e) { console.error('recordResponse', e.message); }
 }
+
+// Write one reply draft on demand, in the creator's tone. Called when a message
+// is opened (lazy) so we don't draft thousands up front. Uses AI if a key is set.
+app.post('/api/draft', async (req, res) => {
+  const item = store.cache.find(m => m.gid === (req.body || {}).gid);
+  if (!item) return res.status(404).json({ error: 'Message not found' });
+  try { res.json({ draft: await generateDraft(item, store.tone) }); }
+  catch (e) { console.error('draft error', e.message); res.status(500).json({ error: 'Draft failed' }); }
+});
 
 // Stats for the Analytics + Activity pages: accumulated received volume and the
 // per-person response log. Returns the accounts too (label/brand) so the client
