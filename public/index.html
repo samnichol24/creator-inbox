@@ -535,7 +535,7 @@ function injectPhrase(text,m){const p=tone.phrases.split(/[\n,]/).map(s=>s.trim(
 function generateDraft(m){let g=greetingFor(m),b=pick(bodyFor(m),m.id);b=injectPhrase(b,m);let full=g+b;if(tone.vibe==='pro')full=full.charAt(0).toUpperCase()+full.slice(1);full=applyEmoji(full,m);full=full+signature();return full.trim();}
 
 /* ============ STATE ============ */
-let state={view:'inbox',channel:'all',typeFilter:'all',brand:'all',search:'',selected:null,drafts:{},sent:{},gran:'week',fanSort:'all',connections:{}};
+let state={view:'inbox',channel:'all',typeFilter:'all',brand:'all',search:'',selected:null,drafts:{},sent:{},gran:'day',fanSort:'all',connections:{}};
 MESSAGES.forEach(m=>{state.drafts[m.id]=generateDraft(m);});
 
 /* ============ ANALYTICS DATA (deterministic mock) ============ */
@@ -925,6 +925,7 @@ function renderAnalytics(){
         </div>`).join('')}
       </div>
     </div>
+    ${window.__live&&(gran==='week'||gran==='month')?`<p style="font-size:12px;color:var(--txt-3);margin:14px 2px 0;line-height:1.5">Note: these figures reflect the messages currently loaded in your inbox. Recent ${perLabel}s are complete, but older ${perLabel}s can be undercounted because only the most recent comments are pulled from each platform — so treat long-range trends as a rough guide, not an exact history.</p>`:''}
   </div>`;
 }
 function arrow(v){return v>=0
