@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import session from 'express-session';
+import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { authUrl, exchangeCode, listRecentEmails, sendReply, getProfileEmail, listRecentComments, replyToComment, getChannelTitle } from './lib/google.js';
@@ -46,6 +47,25 @@ function portalUsers() {
 }
 const loginOn = () => Object.keys(portalUsers()).length > 0;
 
+// Stateless signed-cookie auth so a redeploy (which wipes the in-memory session
+// store) does NOT log everyone out. The cookie is an HMAC of the username using
+// SESSION_SECRET, which is stable across restarts, so sessions survive deploys.
+const AUTH_SECRET = process.env.SESSION_SECRET || 'dev-secret-change-me';
+const signUser = (u) => crypto.createHmac('sha256', AUTH_SECRET).update(u).digest('hex');
+function cookieUser(req) {
+  const raw = req.headers.cookie || '';
+  const m = raw.match(/(?:^|;\s*)ci_user=([^;]+)/);
+  if (!m) return null;
+  try {
+    const val = decodeURIComponent(m[1]);
+    const i = val.lastIndexOf('.');
+    if (i < 0) return null;
+    const user = val.slice(0, i), sig = val.slice(i + 1);
+    if (sig === signUser(user) && portalUsers()[user] !== undefined) return user;
+  } catch {}
+  return null;
+}
+
 const LOGIN_PAGE = (err) => `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Creator Inbox — Sign in</title><style>
@@ -75,6 +95,9 @@ app.post('/login', (req, res) => {
   const { username, password } = req.body || {};
   if (username && users[username] !== undefined && users[username] === password) {
     req.session.user = username;
+    res.cookie('ci_user', `${username}.${signUser(username)}`, {
+      httpOnly: true, maxAge: 30 * 24 * 3600 * 1000, sameSite: 'lax', secure: 'auto'
+    });
     return res.redirect('/');
   }
   res.redirect('/login?e=1');
@@ -82,7 +105,7 @@ app.post('/login', (req, res) => {
 
 // Gate everything below once PORTAL_USERS is configured.
 app.use((req, res, next) => {
-  if (!loginOn() || req.session?.user) return next();
+  if (!loginOn() || req.session?.user || cookieUser(req)) return next();
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Please sign in.' });
   res.redirect('/login');
 });
@@ -316,6 +339,7 @@ app.get('/auth/discord', (req, res) => {
 });
 
 app.get('/logout', (req, res) => {
+  res.clearCookie('ci_user');
   req.session.destroy(() => res.redirect('/login'));
 });
 
