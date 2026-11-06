@@ -425,35 +425,37 @@ app.get('/api/messages', async (req, res) => {
       }
     };
 
-    for (const a of store.email) {
-      try { const e = await listRecentEmails({ refresh_token: a.refresh_token }, 50); e.forEach(x => x.ch = 'email'); tag(e, 'email', a); }
-      catch (e) { console.error('gmail error', a.email, e.message); }
-    }
-    for (const a of store.youtube) {
-      // 365-day window so older comments across all videos are pulled in, not
-      // just the last few months.
-      try { tag(await listRecentComments({ refresh_token: a.refresh_token }, 365), 'youtube', a); }
-      catch (e) { console.error('youtube error', a.channel, e.message); }
-    }
+    // Run every account's fetch CONCURRENTLY (was sequential, which made a full
+    // pull take ~80s). Each task returns {arr, platform, account} or null on error.
+    const t = (fn, platform, account, label) => (async () => {
+      try { return { arr: await fn(), platform, account }; }
+      catch (e) { console.error(label + ' error', e.message); return null; }
+    })();
+    const tasks = [];
+    for (const a of store.email)
+      tasks.push(t(async () => { const e = await listRecentEmails({ refresh_token: a.refresh_token }, 50); e.forEach(x => x.ch = 'email'); return e; }, 'email', a, 'gmail'));
+    for (const a of store.youtube)
+      // 365-day window, capped at 2500 recent comments so the scan stays fast.
+      tasks.push(t(() => listRecentComments({ refresh_token: a.refresh_token }, 365, 2500), 'youtube', a, 'youtube'));
     for (const a of store.instagram) {
-      try { tag(await ig.listComments(a.token), 'instagram', a); } catch (e) { console.error('ig cmt error', a.username, e.message); }
-      try { tag(await ig.listDMs(a.token), 'instagram', a); } catch (e) { console.error('ig dm error', a.username, e.message); }
+      tasks.push(t(() => ig.listComments(a.token), 'instagram', a, 'ig cmt'));
+      tasks.push(t(() => ig.listDMs(a.token), 'instagram', a, 'ig dm'));
     }
     for (const a of store.facebook) {
-      try { tag(await fb.listComments(a.pageToken, a.pageId), 'facebook', a); } catch (e) { console.error('fb cmt error', a.pageName, e.message); }
-      try { tag(await fb.listMessenger(a.pageToken, a.pageId), 'facebook', a); } catch (e) { console.error('fb msgr error', a.pageName, e.message); }
+      tasks.push(t(() => fb.listComments(a.pageToken, a.pageId), 'facebook', a, 'fb cmt'));
+      tasks.push(t(() => fb.listMessenger(a.pageToken, a.pageId), 'facebook', a, 'fb msgr'));
     }
-    for (const a of store.threads) {
-      try { tag(await th.listReplies(a.token), 'threads', a); } catch (e) { console.error('threads error', a.username, e.message); }
-    }
-    for (const a of store.discord) {
-      try { tag(await dc.listMessages(a.botToken), 'discord', a); } catch (e) { console.error('discord error', a.name, e.message); }
-    }
+    for (const a of store.threads)
+      tasks.push(t(() => th.listReplies(a.token), 'threads', a, 'threads'));
+    for (const a of store.discord)
+      tasks.push(t(() => dc.listMessages(a.botToken), 'discord', a, 'discord'));
+
+    const results = await Promise.all(tasks);
+    for (const r of results) if (r) tag(r.arr, r.platform, r.account);
 
     items = items.filter(it => !store.replied.has(it.gid));
-    for (const it of items) {
-      it.draft = await generateDraft(it, store.tone);
-    }
+    // NOTE: drafts are generated on the client (instant), not here — pre-drafting
+    // thousands of items server-side was slow and (with an AI key) impractical.
     store.cache = items;
     res.json(items);
   } catch (e) {
