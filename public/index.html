@@ -567,18 +567,51 @@ const HIST=[]; // [{date, counts:{chId:n}, total}]
 function fmtInt(n){return n.toLocaleString('en-US');}
 function ymd(d){return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
 
+// Turn a relative time label ("2h", "5d", "12w") into whole days ago.
+function parseDaysAgo(timeStr){
+  const m=String(timeStr||'').trim().match(/^(\d+)\s*([mhdw])/i);
+  if(!m) return 0;
+  const n=+m[1], u=m[2].toLowerCase();
+  if(u==='m'||u==='h') return 0;   // under a day → today
+  if(u==='w') return n*7;
+  return n;                        // days
+}
+// Build REAL per-day history (last 180 days) from the live inbox, bucketed by
+// platform, honoring the brand filter — the analytics page runs on this instead
+// of the mock when the app is live.
+function buildLiveHistory(brandFilter){
+  const span=180, today=new Date(); today.setHours(0,0,0,0);
+  const perDay={};
+  for(const m of MESSAGES){
+    if(!m.gid) continue;
+    if(brandFilter&&brandFilter!=='all'&&m.brand!==brandFilter) continue;
+    const d=parseDaysAgo(m.time);
+    if(d<0||d>=span) continue;
+    (perDay[d]=perDay[d]||{counts:{},total:0});
+    perDay[d].counts[m.ch]=(perDay[d].counts[m.ch]||0)+1;
+    perDay[d].total++;
+  }
+  const out=[];
+  for(let i=span-1;i>=0;i--){               // oldest first, today last
+    const date=new Date(today.getTime()-i*DAY_MS);
+    const dc=perDay[i]||{counts:{},total:0};
+    out.push({date,counts:dc.counts,total:dc.total});
+  }
+  return out;
+}
 // Build display buckets for a granularity. Returns {buckets:[{label,total,counts,sub}], windowTotal, counts}
 function buildBuckets(gran){
+  const H = window.__live ? buildLiveHistory(state.brand) : HIST;
   if(gran==='day'){
     // exclude today (partial) → last 14 complete days
-    const days=HIST.slice(0,-1).slice(-14);
+    const days=H.slice(0,-1).slice(-14);
     return days.map(d=>({label:(d.date.getMonth()+1)+'/'+d.date.getDate(),total:d.total,counts:d.counts,
       full:d.date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}));
   }
   if(gran==='week'){
     // group into weeks (Mon start); keep only complete 7-day weeks, last 12
     const weeks=[];let cur=null;
-    HIST.forEach(d=>{
+    H.forEach(d=>{
       const dow=(d.date.getDay()+6)%7; // Mon=0
       if(dow===0||!cur){ if(cur)weeks.push(cur); cur={start:new Date(d.date),total:0,counts:{},days:0}; }
       cur.total+=d.total;cur.days++;CHANNELS.forEach(c=>cur.counts[c.id]=(cur.counts[c.id]||0)+d.counts[c.id]);
@@ -589,7 +622,7 @@ function buildBuckets(gran){
   }
   // month — keep only complete months, last 6
   const months={};const order=[];
-  HIST.forEach(d=>{const k=d.date.getFullYear()+'-'+d.date.getMonth();if(!months[k]){months[k]={d:new Date(d.date.getFullYear(),d.date.getMonth(),1),total:0,counts:{},days:0};order.push(k);}months[k].total+=d.total;months[k].days++;CHANNELS.forEach(c=>months[k].counts[c.id]=(months[k].counts[c.id]||0)+d.counts[c.id]);});
+  H.forEach(d=>{const k=d.date.getFullYear()+'-'+d.date.getMonth();if(!months[k]){months[k]={d:new Date(d.date.getFullYear(),d.date.getMonth(),1),total:0,counts:{},days:0};order.push(k);}months[k].total+=d.total;months[k].days++;CHANNELS.forEach(c=>months[k].counts[c.id]=(months[k].counts[c.id]||0)+d.counts[c.id]);});
   const complete=order.filter(k=>{const m=months[k];const dim=new Date(m.d.getFullYear(),m.d.getMonth()+1,0).getDate();return m.days===dim;});
   return complete.slice(-6).map(k=>({label:months[k].d.toLocaleDateString('en-US',{month:'short'}),total:months[k].total,counts:months[k].counts,
     full:months[k].d.toLocaleDateString('en-US',{month:'long',year:'numeric'})}));
@@ -755,7 +788,7 @@ function renderBrandBar(){
   for(const b of brands)html+=chip(b.id,b.label,BRAND_COLORS[b.id]||'#888');
   bar.innerHTML=html;
 }
-function setBrand(id){state.brand=id;renderBrandBar();if(state.view==='fans')renderFans();else render();}
+function setBrand(id){state.brand=id;renderBrandBar();if(state.view==='fans')renderFans();else if(state.view==='analytics')renderAnalytics();else render();}
 // Move one connected account to the other brand (persists to the server).
 async function cycleAcctBrand(platform, acctId){
   const arr=(window.LIVE_ACCOUNTS&&window.LIVE_ACCOUNTS[platform])||[];
@@ -787,7 +820,7 @@ function setView(v){
   document.getElementById('regenAllBtn').style.display=isInbox?'':'none';
   document.getElementById('approveAllBtn').style.display=isInbox?'':'none';
   if(v==='inbox'){render();}
-  else if(v==='analytics'){document.getElementById('topTitle').textContent='Analytics';document.getElementById('topSub').textContent='Message volume & growth';renderAnalytics();}
+  else if(v==='analytics'){document.getElementById('topTitle').textContent='Analytics';document.getElementById('topSub').textContent='Message volume & growth';renderBrandBar();renderAnalytics();}
   else if(v==='fans'){document.getElementById('topTitle').textContent='Fans';document.getElementById('topSub').textContent='Your most engaged people';renderBrandBar();renderFans();}
   else if(v==='connect'){document.getElementById('topTitle').textContent='Connections';document.getElementById('topSub').textContent='Link your platforms';renderConnect();}
   else{document.getElementById('topTitle').textContent='Tone Sheet';document.getElementById('topSub').textContent='Teach the portal how you talk';renderTone();}
@@ -824,6 +857,13 @@ function renderAnalytics(){
   const gran=state.gran;
   const buckets=buildBuckets(gran);
   const windowTotal=buckets.reduce((a,b)=>a+b.total,0);
+  if(window.__live&&windowTotal===0){
+    p.innerHTML=`<div class="wrap">
+      <div class="page-head"><h2>Analytics</h2><p>How many fan messages you're getting across every platform — and whether that's growing.</p></div>
+      <div class="chart-card"><div class="empty" style="padding:56px 24px"><svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg><div><b>Crunching your numbers…</b><br/>Once your inbox finishes pulling messages, your volume and trends show up here. Hit Refresh if this stays empty.</div></div></div>
+    </div>`;
+    return;
+  }
   // period-over-period: compare recent half vs previous half of shown buckets
   const half=Math.floor(buckets.length/2);
   const recent=buckets.slice(-half).reduce((a,b)=>a+b.total,0);
@@ -877,7 +917,7 @@ function renderAnalytics(){
     <div class="chart-card">
       <div class="ch-head"><h4>By platform</h4><span class="ch-sub">${windowLabel} · ${fmtInt(windowTotal)} total</span></div>
       <div class="platform-list">
-        ${pfSorted.map(({c,n})=>`<div class="pf-row">
+        ${pfSorted.filter(x=>x.n>0).map(({c,n})=>`<div class="pf-row">
           <span class="ico" style="background:${c.bg}">${colorGlyph(c)}</span>
           <span class="pf-name">${c.name}</span>
           <span class="pf-track"><span class="pf-fill" style="width:${Math.round(n/pfMax*100)}%"></span></span>
@@ -1284,6 +1324,7 @@ render();
       });
       window.__loading = false;
       if(state.view === 'fans') renderFans();
+      else if(state.view === 'analytics') renderAnalytics();
       else if(state.view !== 'inbox') setView('inbox');
       else render();
       toast(added ? `${added} new message${added>1?'s':''} came in` : 'No new messages right now');
