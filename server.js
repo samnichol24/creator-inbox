@@ -105,6 +105,7 @@ app.post('/login', (req, res) => {
 
 // Gate everything below once PORTAL_USERS is configured.
 app.use((req, res, next) => {
+  if (req.path === '/privacy') return next(); // public privacy policy (Meta/Google fetch it)
   if (!loginOn() || req.session?.user || cookieUser(req)) return next();
   if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Please sign in.' });
   res.redirect('/login');
@@ -540,6 +541,28 @@ app.post('/api/send', async (req, res) => {
     console.error('send error', e.message);
     res.status(500).json({ error: 'Send failed: ' + e.message });
   }
+});
+
+// ---------- Privacy policy (required to publish the Meta/Google apps) ----------
+app.get('/privacy', (req, res) => {
+  res.type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Creator Inbox — Privacy Policy</title>
+<style>body{max-width:720px;margin:40px auto;padding:0 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6;color:#1a1a1a}h1{font-size:24px}h2{font-size:17px;margin-top:28px}p,li{font-size:15px}.muted{color:#666;font-size:13px}</style>
+</head><body>
+<h1>Creator Inbox — Privacy Policy</h1>
+<p class="muted">Last updated: November 2026</p>
+<p>Creator Inbox is a private tool that the account owner uses to read and reply to messages and comments on their own connected accounts (email, YouTube, Instagram, Facebook, Threads, and Discord), all in one place.</p>
+<h2>What we access</h2>
+<p>When you connect an account, Creator Inbox accesses only what is needed to show your incoming messages and comments and to send replies you approve: the messages, comments, and the names/handles of the people who sent them, along with basic profile information for the connected account itself.</p>
+<h2>How we use it</h2>
+<p>This information is used solely to display your inbox and to send the replies you approve. It is not sold, rented, or shared with third parties, and it is not used for advertising.</p>
+<h2>Storage</h2>
+<p>Connection tokens and settings are stored privately for the account owner so the inbox keeps working between sessions. Message content is fetched on demand to display your inbox and is not retained beyond what is needed to operate the tool.</p>
+<h2>Data deletion</h2>
+<p>You can disconnect any account at any time from the Connections screen, which removes its stored access token. To request deletion of all stored data, contact the address below.</p>
+<h2>Contact</h2>
+<p>Questions or deletion requests: <a href="mailto:samnicholson2@gmail.com">samnicholson2@gmail.com</a>.</p>
+</body></html>`);
 });
 
 // ---------- Static site ----------
