@@ -178,6 +178,12 @@
   .email-subj{font-size:15px;font-weight:700;color:var(--txt);margin-bottom:10px;line-height:1.35}
   .email-body{font-size:14px;line-height:1.6;color:var(--txt);white-space:normal;word-break:break-word}
   .email-card .m-meta{font-size:11px;color:var(--txt-3);margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+  .emoji-panel{position:fixed;z-index:9999;width:324px;max-height:270px;overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:8px 10px}
+  .emoji-cat{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt-3);font-weight:700;margin:8px 3px 4px}
+  .emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:1px}
+  .emoji-btn{border:none;background:transparent;font-size:19px;line-height:1;padding:5px 0;border-radius:7px;cursor:pointer}
+  .emoji-btn:hover{background:var(--bubble)}
+  .btn.emoji-trigger{font-size:15px;padding-left:9px;padding-right:9px}
 
   .composer{border-top:1px solid var(--line);background:var(--surface);padding:16px 26px 22px;position:sticky;bottom:0}
   .c-label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--txt-3);margin-bottom:10px}
@@ -430,6 +436,7 @@
 </div>
 
 <div class="toast-wrap" id="toasts"></div>
+<div id="emojiPanel" class="emoji-panel" style="display:none"></div>
 
 <script>
 /* ============ ICONS ============ */
@@ -822,6 +829,7 @@ function renderDetail(){
              <div class="act"><button class="btn good" onclick="approve(${m.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Approve &amp; send</button><span class="sc"><b>⌥ + return</b></span></div>
              <div class="act"><button class="btn learn" onclick="approveAndLearn(${m.id})" title="Send this reply and save it to your tone sheet, so future drafts learn from the ones you like"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-4-7 4V5a2 2 0 012-2h10a2 2 0 012 2z"/><path d="M9 9l2 2 4-4"/></svg>Approve + save to tone</button><span class="sc"><b>⌥ + shift + return</b></span></div>
              <div class="act"><button class="btn sm" onclick="regenerateOne(${m.id})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7L21 8M21 3v5h-5"/></svg>Rewrite</button><span class="sc"><b>⌥ + R</b></span></div>
+             <button type="button" class="btn ghost sm emoji-trigger" onclick="toggleEmojiPanel(${m.id}, this)" title="Insert emoji">😊</button>
              <button class="btn ghost sm" onclick="skip(${m.id})">Skip</button>
              <div class="spacer"></div><span class="mini" id="chars-${m.id}">${draft.length}</span>
            </div>`}
@@ -1495,6 +1503,48 @@ function toggleTheme(){const cur=document.documentElement.getAttribute('data-the
 
 /* ============ HELPERS ============ */
 function escapeHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+/* ============ EMOJI PICKER ============ */
+const EMOJI_SET={
+  'Smileys & people':'😀 😃 😄 😁 😆 😅 😂 🤣 🥲 ☺️ 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥳 🤩 😏 😌 😔 🥺 😢 😭 😤 😳 🥹 🤗 🤔 🤭 🤫 🙄 😮‍💨 😴 🤤 🥴 😵‍💫 🤯 🫠 🫡 🫢',
+  'Gestures':'👍 👎 👏 🙌 🙏 🤝 👐 🫶 🤌 🤙 ✌️ 🤞 🤟 🤘 👌 👈 👉 👆 👇 ☝️ ✋ 🤚 👋 💪 🫰 🤲',
+  'Hearts':'❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 🩵',
+  'Fun & symbols':'🔥 ✨ ⭐ 🌟 💫 ⚡ 💥 💯 🎉 🎊 🥂 🎁 👑 🏆 🥇 🚀 💎 🎯 📈 💰 🤑 🎵 🎶 🎸 🎤 🎬 📸 👀 💅 🙌 🤌 🫶 ✅ ⏰ 📌'
+};
+let __emojiTargetId=null;
+function emojiPanelHtml(){
+  let h='';
+  for(const cat in EMOJI_SET){
+    h+=`<div class="emoji-cat">${cat}</div><div class="emoji-grid">`;
+    for(const e of EMOJI_SET[cat].split(' ').filter(Boolean))
+      h+=`<button type="button" class="emoji-btn" onclick="pickEmoji('${e}')">${e}</button>`;
+    h+='</div>';
+  }
+  return h;
+}
+function toggleEmojiPanel(id, btn){
+  __emojiTargetId=id;
+  const p=document.getElementById('emojiPanel'); if(!p)return;
+  if(p.style.display==='block'){p.style.display='none';return;}
+  if(!p.dataset.built){p.innerHTML=emojiPanelHtml();p.dataset.built='1';}
+  const r=btn.getBoundingClientRect(),pw=324,ph=270;
+  let left=Math.max(12,Math.min(r.left,window.innerWidth-pw-12));
+  let top=r.top-ph-8; if(top<12)top=r.bottom+8;
+  p.style.left=left+'px';p.style.top=top+'px';p.style.display='block';
+}
+function pickEmoji(e){
+  const id=__emojiTargetId; if(id==null)return;
+  const ta=document.getElementById('draft-'+id); if(!ta)return;
+  const s=(ta.selectionStart!=null)?ta.selectionStart:ta.value.length;
+  const en=(ta.selectionEnd!=null)?ta.selectionEnd:ta.value.length;
+  ta.value=ta.value.slice(0,s)+e+ta.value.slice(en);
+  const pos=s+e.length; ta.focus(); try{ta.setSelectionRange(pos,pos);}catch(_){}
+  onDraftEdit(id);
+}
+document.addEventListener('click',e=>{
+  const p=document.getElementById('emojiPanel'); if(!p||p.style.display!=='block')return;
+  if(p.contains(e.target)||(e.target.closest&&e.target.closest('.emoji-trigger')))return;
+  p.style.display='none';
+});
 function toast(msg){const wrap=document.getElementById('toasts');const t=document.createElement('div');t.className='toast';t.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>${escapeHtml(msg)}`;wrap.appendChild(t);setTimeout(()=>{t.style.transition='opacity .3s,transform .3s';t.style.opacity='0';t.style.transform='translateY(8px)';setTimeout(()=>t.remove(),300);},2500);}
 
 /* boot */
