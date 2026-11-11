@@ -124,6 +124,8 @@
   .bchip{padding:6px 14px;border-radius:20px;border:1px solid var(--line);background:transparent;color:var(--txt-2);font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
   .bchip:hover{color:var(--txt)}
   .bchip .bdot{width:8px;height:8px;border-radius:50%;flex:none}
+  .bchip .acct-plat{font-size:10.5px;font-weight:600;opacity:.6;padding-left:2px;letter-spacing:.2px}
+  .bchip.active .acct-plat{opacity:.85}
 
   /* ============ INBOX ============ */
   .inbox{display:grid;grid-template-columns:minmax(320px,400px) 1fr;flex:1;overflow:hidden}
@@ -165,9 +167,17 @@
   .d-head .meta .chn .ico svg{width:9px;height:9px}
   .d-head .kbd-hint{margin-left:auto;font-size:11px;color:var(--txt-3);display:flex;align-items:center;gap:5px}
   .kbd{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border:1px solid var(--line-2);border-bottom-width:2px;border-radius:5px;font-size:11px;color:var(--txt-2);background:var(--surface-2)}
-  .conv{padding:24px 26px;flex:1}
+  .conv{padding:24px 26px;flex:1;overflow-y:auto}
   .bubble-in{background:var(--bubble);border-radius:4px 15px 15px 15px;padding:14px 16px;max-width:80%;font-size:14px;line-height:1.5}
   .bubble-in .m-meta{font-size:11px;color:var(--txt-3);margin-top:8px}
+  .bubble-out{background:var(--accent);color:#fff;border-radius:15px 15px 4px 15px;padding:14px 16px;max-width:80%;font-size:14px;line-height:1.5;margin-left:auto}
+  .bubble-out .m-meta{font-size:11px;color:#fff;opacity:.75;margin-top:8px}
+  .conv .bubble-in,.conv .bubble-out{margin-bottom:10px}
+  .conv-note{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt-3);font-weight:700;margin-bottom:14px;text-align:center}
+  .email-card{background:var(--bubble);border-radius:12px;padding:18px 20px;max-width:100%}
+  .email-subj{font-size:15px;font-weight:700;color:var(--txt);margin-bottom:10px;line-height:1.35}
+  .email-body{font-size:14px;line-height:1.6;color:var(--txt);white-space:normal;word-break:break-word}
+  .email-card .m-meta{font-size:11px;color:var(--txt-3);margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
 
   .composer{border-top:1px solid var(--line);background:var(--surface);padding:16px 26px 22px;position:sticky;bottom:0}
   .c-label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--txt-3);margin-bottom:10px}
@@ -548,6 +558,27 @@ function applyEmoji(text,m){
 function signature(){return tone.signoff&&tone.signoff.trim()?'\n\n'+tone.signoff.trim():'';}
 function injectPhrase(text,m){const p=tone.phrases.split(/[\n,]/).map(s=>s.trim()).filter(Boolean);if(!p.length)return text;if(m.id%2===0)return text+' — '+pick(p,m.id);return text;}
 function generateDraft(m){let g=greetingFor(m),b=pick(bodyFor(m),m.id);b=injectPhrase(b,m);let full=g+b;if(tone.vibe==='pro')full=full.charAt(0).toUpperCase()+full.slice(1);full=applyEmoji(full,m);full=full+signature();return full.trim();}
+// Read the message and pick the RIGHT kind of reply, so a statement never gets a
+// "great question" draft. Used for every live message (comments + DMs).
+function classifyIntent(text){
+  const t=' '+String(text||'').toLowerCase().replace(/\s+/g,' ')+' ';
+  const has=(...ws)=>ws.some(w=>t.includes(w));
+  // negativity / trolls first — never reply warmly to these
+  if(has('overrated','trash','garbage',' sucks','you suck','terrible','awful','boring','cringe',' mid ',' ratio ','fell off','flop ',' worst','hate this','so bad','waste of','anyone could','nothing special','stupid','clickbait',' fake','L take','ratio'))return 'troll';
+  // business / collaboration
+  if(has('collab','sponsor','partnership','partner with','paid promo',' promo','pr package','media kit',' press ','podcast','guest on','guest spot','ambassador','work together','business inquiry','rate card',' rates','affiliate','gifting','gift you','send you our','send you some','our product','our brand','our new','discuss a','paid review','proposal','opportunity','your management','reach out','taking brand','brand deal','coaching','1-on-1','1 on 1','one on one','one-on-one','mentor','consult','hire you','pay you',"i'll pay",'ill pay','how much do you charge','charge for','your rate'))return 'collab';
+  // emotional support / real-life impact
+  if(has('got me through','saved my','saved me','therapy','hard year','hard time','tough time','difficult time','struggling','struggle','depress','anxiety','anxious','suicid','lost my','passed away','grief','means so much','means the world','you helped','helped me','changed my life','rough patch','dark place','going through'))return 'support';
+  // hype / anticipation for upcoming content
+  if(has('part 2','part two','when is','when are','when do','when does','drop the','dropping','cant wait',"can't wait",'need it','need part','release','next video','next part','sequel','waiting for','hurry'))return 'hype';
+  // personal milestones aimed at the creator
+  if(has('happy birthday','congrats','congratulations','merry christmas','happy new year','happy holidays','proud of you'))return 'personal';
+  // questions
+  if(t.includes('?')||/\b(how|what|when|where|which|why|who|can you|could you|will you|would you|do you|are you|is there|any tips|any advice|how do|how did|where can)\b/.test(t))return 'question';
+  // compliments / praise
+  if(has('love','amazing','incredible','awesome','so good','so great','the best','fire','🔥','obsessed','favorite','favourite','nailed','killed it','goat','genius','inspiring','inspire','underrated','quality','beautiful','perfect','insane','unreal','talented','masterpiece',' gold','legend','iconic','thank you','thanks','appreciate'))return 'compliment';
+  return 'default';
+}
 
 /* ============ STATE ============ */
 let state={view:'inbox',channel:'all',typeFilter:'all',brand:'all',acct:'all',sort:'new',search:'',selected:null,drafts:{},sent:{},gran:'day',fanSort:'all',actPerson:'all',actWeek:0,connections:{}};
@@ -748,6 +779,25 @@ function itemRow(m){
 
 /* ============ DETAIL ============ */
 function detailEmpty(){return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><div>Select a message to see its draft</div></div>`;}
+// The conversation area: full original email for emails, recent back-and-forth
+// for DMs (when we have the history), or the single incoming message otherwise.
+function convHtml(m){
+  const ch=CH[m.ch]||{};
+  if(m.ch==='email'){
+    const subj=m.subject||'';
+    let body=m.text||'';
+    if(subj && body.indexOf(subj)===0) body=body.slice(subj.length).trim();
+    return `<div class="conv"><div class="email-card">${subj?`<div class="email-subj">${escapeHtml(subj)}</div>`:''}<div class="email-body">${escapeHtml(body).replace(/\n/g,'<br>')}</div><div class="m-meta">${escapeHtml(m.handle)} · ${m.time} ago</div></div></div>`;
+  }
+  if(ch.type==='dm' && Array.isArray(m.thread) && m.thread.length>1){
+    const rows=m.thread.map(x=>{
+      const mine=x.who==='me';
+      return `<div class="bubble-${mine?'out':'in'}">${escapeHtml(x.text||'')}<div class="m-meta">${mine?'You':escapeHtml(m.name)}${x.time?` · ${x.time} ago`:''}</div></div>`;
+    }).join('');
+    return `<div class="conv"><div class="conv-note">Last ${m.thread.length} messages with ${escapeHtml(firstName(m.name)||m.name)}</div>${rows}</div>`;
+  }
+  return `<div class="conv"><div class="bubble-in">${escapeHtml(m.text)}<div class="m-meta">${escapeHtml(m.handle)} · ${m.time} ago</div></div></div>`;
+}
 function renderDetail(){
   const d=document.getElementById('detail');
   const m=MESSAGES.find(x=>x.id===state.selected);
@@ -761,7 +811,7 @@ function renderDetail(){
         <div class="chn"><span class="ico" style="background:${ch.bg}">${colorGlyph(ch)}</span>${ch.name} · ${ch.type==='dm'?'Direct message':'Comment'}${m.acctLabel?` · on <b>${escapeHtml(m.acctLabel)}</b>`:''} · ${m.time} ago</div></div>
       <div class="kbd-hint"><span class="kbd">↑</span><span class="kbd">↓</span> to move</div>
     </div>
-    <div class="conv"><div class="bubble-in">${escapeHtml(m.text)}<div class="m-meta">${escapeHtml(m.handle)} · ${m.time} ago</div></div></div>
+    ${convHtml(m)}
     <div class="composer">
       <div class="c-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6z"/></svg>Suggested reply<span class="pill" id="tonePill">${tone.samples?'in your voice':'default tone'}</span></div>
       ${sent
@@ -873,8 +923,9 @@ function renderAcctBar(){
   const chip=(id,label,platform)=>{
     const active=state.acct===id;
     const ic=platform?platIcon(platform):'';
+    const plat=platform?`<span class="acct-plat">${escapeHtml(platName(platform))}</span>`:'';
     const style=active?'style="background:var(--accent);color:#fff;border-color:transparent"':'';
-    return `<button class="bchip ${active?'active':''}" ${style} onclick="setAcct('${jsAttr(id)}')">${ic}${escapeHtml(label)}</button>`;
+    return `<button class="bchip ${active?'active':''}" ${style} onclick="setAcct('${jsAttr(id)}')">${ic}${escapeHtml(label)}${plat}</button>`;
   };
   let html=`<span class="blab">Account</span>`+chip('all','All',null);
   for(const a of accts)html+=chip(a.id,a.label,a.platform);
@@ -1551,8 +1602,8 @@ render();
       emails.forEach(e=>{
         if(MESSAGES.find(x=>x.gid === e.gid)) return; // already have it
         const nm = { id: idc++, ch: e.ch || 'email', name:e.name, handle:e.handle, text:e.text,
-                     intent:'question', topic:'', time:e.time, live:true, gid:e.gid,
-                     threadId:e.threadId, subject:e.subject, acct:e.acct, acctLabel:e.acctLabel,
+                     intent: classifyIntent(e.text), topic:'', time:e.time, live:true, gid:e.gid,
+                     threadId:e.threadId, subject:e.subject, thread:e.thread, acct:e.acct, acctLabel:e.acctLabel,
                      brand:e.brand, brandLabel:e.brandLabel };
         MESSAGES.unshift(nm);
         state.drafts[nm.id] = e.draft || generateDraft(nm);
