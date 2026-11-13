@@ -551,7 +551,8 @@ app.get('/api/diag', async (req, res) => {
   for (const a of store.facebook)
     out.accounts.push({ platform: 'facebook', label: LABEL.facebook(a), brand: brandOf('facebook', a),
       comments: await probe(() => fb.listComments(a.pageToken, a.pageId)),
-      messenger: await probe(() => fb.listMessenger(a.pageToken, a.pageId)) });
+      messenger: await probe(() => fb.listMessenger(a.pageToken, a.pageId)),
+      detail: await fb.diagnose(a.pageToken, a.pageId) });
   for (const a of store.threads)
     out.accounts.push({ platform: 'threads', label: LABEL.threads(a), brand: brandOf('threads', a),
       replies: await probe(() => th.listReplies(a.token)) });
