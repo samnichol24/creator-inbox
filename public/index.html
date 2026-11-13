@@ -1659,13 +1659,34 @@ render();
         state.drafts[nm.id] = e.draft || generateDraft(nm);
         added++;
       });
+      // Prune items that are no longer pending — i.e. they've since been replied to
+      // (in the app or elsewhere), so the server stopped returning them. We keep
+      // anything sent from the portal this session (it belongs in the Sent tab) and
+      // never prune on an empty/failed pull. This stops already-handled comments
+      // from lingering without needing a full page reload.
+      let cleared = 0;
+      if(emails.length){
+        const returned = new Set(emails.map(e=>e.gid));
+        for(let i=MESSAGES.length-1;i>=0;i--){
+          const m=MESSAGES[i];
+          if(m.live && m.gid && !returned.has(m.gid) && !state.sent[m.id]){
+            if(state.selected===m.id) state.selected=null;
+            delete state.drafts[m.id];
+            MESSAGES.splice(i,1);
+            cleared++;
+          }
+        }
+      }
       window.__loading = false;
       if(state.view === 'fans') renderFans();
       else if(state.view === 'analytics') renderAnalytics();
       else if(state.view === 'activity') renderActivity();
       else if(state.view !== 'inbox') setView('inbox');
       else render();
-      toast(added ? `${added} new message${added>1?'s':''} came in` : 'No new messages right now');
+      const parts=[];
+      if(added) parts.push(`${added} new`);
+      if(cleared) parts.push(`${cleared} already handled cleared`);
+      toast(parts.length ? parts.join(' · ') : 'No new messages right now');
     }catch(err){ window.__loading = false; render(); toast('Could not reach your inbox'); }
   };
 
