@@ -738,6 +738,9 @@ function chanRow(c,count,active){
 function visibleMessages(){
   const arr=MESSAGES.filter(m=>{
     if(state.skipped&&state.skipped[m.id])return false; // skipped → out of the inbox
+    // Once we've replied, the item leaves the inbox immediately (it still lives in
+    // the Sent tab and is tracked in analytics) — so you never reply to it twice.
+    if(state.sent[m.id] && state.typeFilter!=='sent') return false;
     if(state.brand!=='all'&&m.brand!==state.brand)return false;
     if(state.acct!=='all'&&m.acct!==state.acct)return false;
     if(state.channel!=='all'&&m.ch!==state.channel)return false;
@@ -818,6 +821,18 @@ function convHtml(m){
       return `<div class="bubble-${mine?'out':'in'}">${escapeHtml(x.text||'')}<div class="m-meta">${mine?'You':escapeHtml(m.name)}${x.time?` · ${x.time} ago`:''}</div></div>`;
     }).join('');
     return `<div class="conv"><div class="conv-note">Last ${m.thread.length} messages with ${escapeHtml(firstName(m.name)||m.name)}</div>${rows}</div>`;
+  }
+  // A comment that has replies: show the original comment + the reply chain so you
+  // can read it and tell whether we already replied or it was another fan.
+  if(Array.isArray(m.replies) && m.replies.length){
+    const rows=m.replies.map(x=>{
+      const mine=x.who==='me';
+      return `<div class="bubble-${mine?'out':'in'}">${escapeHtml(x.text||'')}<div class="m-meta">${mine?'You':'Reply'}${x.time?` · ${x.time} ago`:''}</div></div>`;
+    }).join('');
+    return `<div class="conv">
+      <div class="bubble-in">${escapeHtml(m.text)}<div class="m-meta">${escapeHtml(m.handle||m.name)}${m.time?` · ${m.time} ago`:''}</div></div>
+      <div class="conv-note">${m.replies.length} ${m.replies.length===1?'reply':'replies'} on this comment</div>
+      ${rows}</div>`;
   }
   return `<div class="conv"><div class="bubble-in">${escapeHtml(m.text)}<div class="m-meta">${escapeHtml(m.handle)} · ${m.time} ago</div></div></div>`;
 }
@@ -1680,7 +1695,7 @@ render();
         if(MESSAGES.find(x=>x.gid === e.gid)) return; // already have it
         const nm = { id: idc++, ch: e.ch || 'email', name:e.name, handle:e.handle, text:e.text,
                      intent: classifyIntent(e.text), topic:'', time:e.time, live:true, gid:e.gid,
-                     threadId:e.threadId, subject:e.subject, thread:e.thread, acct:e.acct, acctLabel:e.acctLabel,
+                     threadId:e.threadId, subject:e.subject, thread:e.thread, replies:e.replies, acct:e.acct, acctLabel:e.acctLabel,
                      brand:e.brand, brandLabel:e.brandLabel };
         MESSAGES.unshift(nm);
         state.drafts[nm.id] = e.draft || generateDraft(nm);
