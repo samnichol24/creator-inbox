@@ -588,7 +588,7 @@ function classifyIntent(text){
 }
 
 /* ============ STATE ============ */
-let state={view:'inbox',channel:'all',typeFilter:'all',brand:'all',acct:'all',sort:'new',search:'',selected:null,drafts:{},sent:{},gran:'day',fanSort:'all',actPerson:'all',actWeek:0,connections:{}};
+let state={view:'inbox',channel:'all',typeFilter:'all',brand:'all',acct:'all',sort:'new',search:'',selected:null,drafts:{},sent:{},skipped:{},gran:'day',fanSort:'all',actPerson:'all',actWeek:0,connections:{}};
 // Viewer's local calendar day (YYYY-MM-DD) — anchors stats to their timezone.
 function localYMD(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 window.STATS={volume:{},responses:{},accounts:{}};
@@ -631,6 +631,20 @@ function parseDaysAgo(timeStr){
   if(u==='m'||u==='h') return 0;   // under a day → today
   if(u==='w') return n*7;
   return n;                        // days
+}
+// Fine-grained "how long ago" in MINUTES, so the inbox can sort by real recency
+// (not just by day — otherwise everything from today ties and lands anywhere).
+function parseMinutesAgo(timeStr){
+  const s=String(timeStr||'').trim().toLowerCase();
+  if(!s||s==='just now') return 0;
+  const m=s.match(/^(\d+)\s*([mhdw])/);
+  if(!m) return 0;
+  const n=+m[1], u=m[2];
+  if(u==='m') return n;
+  if(u==='h') return n*60;
+  if(u==='d') return n*1440;
+  if(u==='w') return n*10080;
+  return 0;
 }
 // Build REAL per-day history (last 180 days) from the live inbox, bucketed by
 // platform, honoring the brand filter — the analytics page runs on this instead
@@ -723,6 +737,7 @@ function chanRow(c,count,active){
 /* ============ INBOX LIST ============ */
 function visibleMessages(){
   const arr=MESSAGES.filter(m=>{
+    if(state.skipped&&state.skipped[m.id])return false; // skipped → out of the inbox
     if(state.brand!=='all'&&m.brand!==state.brand)return false;
     if(state.acct!=='all'&&m.acct!==state.acct)return false;
     if(state.channel!=='all'&&m.ch!==state.channel)return false;
@@ -734,9 +749,10 @@ function visibleMessages(){
     if(state.search){const q=state.search.toLowerCase();if(!(m.name+m.handle+m.text).toLowerCase().includes(q))return false;}
     return true;
   });
-  // Recency sort (newest first by default). Day-granular from the relative time.
-  const days=m=>parseDaysAgo(m.time);
-  arr.sort((a,b)=> state.sort==='old' ? days(b)-days(a) : days(a)-days(b));
+  // Recency sort (newest first by default), to the minute so the most recent
+  // genuinely sits at the top rather than somewhere in the middle.
+  const mins=m=>parseMinutesAgo(m.time);
+  arr.sort((a,b)=> state.sort==='old' ? mins(b)-mins(a) : mins(a)-mins(b));
   return arr;
 }
 function initials(n){const p=n.replace(/[^A-Za-z ].*$/,'').trim().split(/\s+/);return ((p[0]?.[0]||'')+(p[1]?.[0]||'')).toUpperCase()||n.slice(0,2).toUpperCase();}
@@ -861,7 +877,18 @@ function approve(id){const el=document.getElementById('draft-'+id);if(el)state.d
 function approveAndLearn(id){const el=document.getElementById('draft-'+id);const text=el?el.value:(state.drafts[id]||'');state.drafts[id]=text;appendToneSample(text);state.sent[id]=true;const m=MESSAGES.find(x=>x.id===id);toast(`Sent + saved to your tone sheet ✓`);const msgs=visibleMessages();const next=msgs.find(x=>!state.sent[x.id]);if(next)state.selected=next.id;render();}
 function appendToneSample(text){const clean='"'+String(text||'').replace(/\s*\n+\s*/g,' ').trim()+'"';if(!clean||clean==='""')return;tone.samples=(tone.samples&&tone.samples.trim())?tone.samples.trim()+'\n'+clean:clean;}
 function unsend(id){state.sent[id]=false;render();toast('Moved back to your queue');}
-function skip(id){const msgs=visibleMessages();const i=msgs.findIndex(x=>x.id===id);const next=msgs[i+1]||msgs.find(x=>!state.sent[x.id]);if(next)state.selected=next.id;render();scrollActiveIntoView();}
+function skip(id){
+  const m=MESSAGES.find(x=>x.id===id);
+  // remember where we are so we can land on the NEXT item after it's removed
+  const before=visibleMessages(); const i=before.findIndex(x=>x.id===id);
+  const after=before[i+1]||before[i-1]||null;
+  state.skipped[id]=true;
+  if(state.selected===id) state.selected = after ? after.id : null;
+  // persist the skip so it doesn't come back on the next pull / reload
+  if(m&&m.live&&m.gid){ try{fetch('/api/skip',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gid:m.gid})});}catch(e){} }
+  render();scrollActiveIntoView();
+  toast('Skipped — won’t show again');
+}
 function regenerateOne(id){const m=MESSAGES.find(x=>x.id===id);m._seed=(m._seed||0)+1;state.drafts[id]=generateDraft({...m,id:m.id+m._seed*100});render();toast('Rewrote that one');}
 function regenerateAll(){MESSAGES.forEach(m=>{if(!state.sent[m.id])state.drafts[m.id]=generateDraft(m);});render();toast('Regenerated every draft');}
 function approveAll(){const msgs=visibleMessages().filter(m=>!state.sent[m.id]);if(!msgs.length){toast('Nothing left to send here');return;}msgs.forEach(m=>state.sent[m.id]=true);render();toast(`Sent ${msgs.length} ${msgs.length===1?'reply':'replies'}`);}
