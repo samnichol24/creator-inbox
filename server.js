@@ -686,8 +686,16 @@ app.get('/privacy', (req, res) => {
 });
 
 // ---------- Static site ----------
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// Never cache the app HTML, so a normal reload always gets the latest deploy
+// (otherwise the browser keeps serving an old cached version after we ship fixes).
+const noCacheHtml = (res, file) => {
+  if (file.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+};
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: noCacheHtml }));
+app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 app.listen(PORT, () => {
   console.log(`Creator Inbox running on http://localhost:${PORT}`);
