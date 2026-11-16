@@ -132,6 +132,7 @@ const store = {
   tone: { name: 'Sam', samples: '', signoff: '', emojis: '🙌 ✨ 💜 🔥' },
   cache: [],
   replied: new Set(),
+  skipped: new Set(), // gids the user chose to skip — hidden from the inbox
   brands: {}, // acctId -> brandId override (e.g. "instagram:178...": "ignite")
   // Persistent analytics so history survives even after messages age out:
   volume: {},    // { 'YYYY-MM-DD': { acctId: { chId: peakCount } } } — messages RECEIVED
@@ -301,6 +302,7 @@ async function initStore() {
 
   if (saved.tone) store.tone = { ...store.tone, ...saved.tone };
   if (Array.isArray(saved.replied)) store.replied = new Set(saved.replied);
+  if (Array.isArray(saved.skipped)) store.skipped = new Set(saved.skipped);
   if (saved.brands && typeof saved.brands === 'object') store.brands = saved.brands;
   if (saved.volume && typeof saved.volume === 'object') store.volume = saved.volume;
   if (saved.responses && typeof saved.responses === 'object') store.responses = saved.responses;
@@ -515,7 +517,7 @@ app.get('/api/messages', async (req, res) => {
     // lines up with their local calendar.
     recordVolume(items, req.query.today);
 
-    items = items.filter(it => !store.replied.has(it.gid));
+    items = items.filter(it => !store.replied.has(it.gid) && !store.skipped.has(it.gid));
     // NOTE: drafts are generated on the client (instant), not here — pre-drafting
     // thousands of items server-side was slow and (with an AI key) impractical.
     store.cache = items;
@@ -559,6 +561,19 @@ app.get('/api/diag', async (req, res) => {
     out.accounts.push({ platform: 'discord', label: LABEL.discord(a), brand: brandOf('discord', a),
       messages: await probe(() => dc.listMessages(a.botToken)) });
   res.json(out);
+});
+
+// Skip: mark a message as dealt-with so it stops showing in the inbox and does
+// NOT come back on the next pull. Reversible via /api/unskip.
+app.post('/api/skip', (req, res) => {
+  const gid = (req.body || {}).gid;
+  if (gid) { store.skipped.add(gid); db.save('skipped', [...store.skipped]); }
+  res.json({ ok: true });
+});
+app.post('/api/unskip', (req, res) => {
+  const gid = (req.body || {}).gid;
+  if (gid) { store.skipped.delete(gid); db.save('skipped', [...store.skipped]); }
+  res.json({ ok: true });
 });
 
 app.post('/api/send', async (req, res) => {
