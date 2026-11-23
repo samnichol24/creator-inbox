@@ -184,6 +184,14 @@
   .emoji-btn{border:none;background:transparent;font-size:19px;line-height:1;padding:5px 0;border-radius:7px;cursor:pointer}
   .emoji-btn:hover{background:var(--bubble)}
   .btn.emoji-trigger{font-size:15px;padding-left:9px;padding-right:9px}
+  .msg-media{max-width:220px;max-height:240px;border-radius:12px;margin-top:6px;display:block;object-fit:cover}
+  .media-wrap{margin-top:4px;display:flex;flex-wrap:wrap;gap:6px}
+  .post-prev{display:flex;gap:9px;align-items:center;background:var(--bubble);border:1px solid var(--line);border-radius:10px;padding:7px 9px;margin-bottom:10px}
+  .post-prev-link{text-decoration:none;color:inherit;display:block}
+  .post-thumb{width:46px;height:46px;border-radius:8px;object-fit:cover;flex:0 0 auto;background:var(--line)}
+  .post-prev-txt{min-width:0}
+  .post-prev-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt-3);font-weight:700}
+  .post-prev-cap{font-size:12.5px;color:var(--txt-2);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 
   .composer{border-top:1px solid var(--line);background:var(--surface);padding:16px 26px 22px;position:sticky;bottom:0}
   .c-label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--txt-3);margin-bottom:10px}
@@ -783,10 +791,22 @@ function render(){
     }
     document.getElementById('detail').innerHTML=detailEmpty();return;
   }
+  // Preserve the reader's place: capture the list's scroll position and, if the
+  // reply box is focused, the cursor — so a refresh (manual or automatic) doesn't
+  // bounce Kim back to the top or interrupt her typing.
+  const _scroll=list.scrollTop;
+  const _ae=document.activeElement;
+  const _draftFocused=_ae&&_ae.tagName==='TEXTAREA'&&_ae.id&&_ae.id.indexOf('draft-')===0;
+  const _selId=_draftFocused?_ae.id:null;
+  const _selStart=_draftFocused?_ae.selectionStart:null;
+  const _selEnd=_draftFocused?_ae.selectionEnd:null;
   list.innerHTML=msgs.map(itemRow).join('');
   if(!state.selected||!msgs.find(m=>m.id===state.selected))state.selected=msgs[0].id;
   renderDetail();
   [...document.querySelectorAll('.item')].forEach(el=>el.classList.toggle('active',+el.dataset.id===state.selected));
+  // Restore scroll + cursor after the DOM was rebuilt.
+  try{list.scrollTop=_scroll;}catch(_){}
+  if(_selId){const ta=document.getElementById(_selId);if(ta){try{ta.focus();ta.setSelectionRange(_selStart,_selEnd);}catch(_){}}}
 }
 function itemRow(m){
   const ch=CH[m.ch],sent=state.sent[m.id];
@@ -807,8 +827,28 @@ function itemRow(m){
 function detailEmpty(){return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><div>Select a message to see its draft</div></div>`;}
 // The conversation area: full original email for emails, recent back-and-forth
 // for DMs (when we have the history), or the single incoming message otherwise.
+// Render any image/GIF/video a fan attached (to a DM or a Facebook comment).
+function mediaHtml(media){
+  if(!Array.isArray(media)||!media.length)return '';
+  const parts=media.map(x=>{
+    if(!x||!x.url)return '';
+    const u=escapeHtml(x.url);
+    if(x.type==='video')return `<video class="msg-media" src="${u}" controls playsinline preload="metadata"></video>`;
+    return `<a href="${u}" target="_blank" rel="noopener"><img class="msg-media" src="${u}" alt="attachment" loading="lazy"></a>`;
+  }).filter(Boolean).join('');
+  return parts?`<div class="media-wrap">${parts}</div>`:'';
+}
+// Small preview of the post a comment is on, so Kim can see what the fan means.
+function postPreviewHtml(post){
+  if(!post||(!post.thumb&&!post.caption&&!post.link))return '';
+  const cap=post.caption?escapeHtml(String(post.caption).slice(0,120)):'';
+  const thumb=post.thumb?`<img class="post-thumb" src="${escapeHtml(post.thumb)}" alt="post" loading="lazy">`:'';
+  const inner=`<div class="post-prev">${thumb}<div class="post-prev-txt"><div class="post-prev-label">On your post</div>${cap?`<div class="post-prev-cap">${cap}</div>`:''}</div></div>`;
+  return post.link?`<a class="post-prev-link" href="${escapeHtml(post.link)}" target="_blank" rel="noopener">${inner}</a>`:inner;
+}
 function convHtml(m){
   const ch=CH[m.ch]||{};
+  const post=postPreviewHtml(m.post);
   if(m.ch==='email'){
     const subj=m.subject||'';
     let body=m.text||'';
@@ -818,7 +858,7 @@ function convHtml(m){
   if(ch.type==='dm' && Array.isArray(m.thread) && m.thread.length>1){
     const rows=m.thread.map(x=>{
       const mine=x.who==='me';
-      return `<div class="bubble-${mine?'out':'in'}">${escapeHtml(x.text||'')}<div class="m-meta">${mine?'You':escapeHtml(m.name)}${x.time?` · ${x.time} ago`:''}</div></div>`;
+      return `<div class="bubble-${mine?'out':'in'}">${escapeHtml(x.text||'')}${mediaHtml(x.media)}<div class="m-meta">${mine?'You':escapeHtml(m.name)}${x.time?` · ${x.time} ago`:''}</div></div>`;
     }).join('');
     return `<div class="conv"><div class="conv-note">Last ${m.thread.length} messages with ${escapeHtml(firstName(m.name)||m.name)}</div>${rows}</div>`;
   }
@@ -827,14 +867,15 @@ function convHtml(m){
   if(Array.isArray(m.replies) && m.replies.length){
     const rows=m.replies.map(x=>{
       const mine=x.who==='me';
-      return `<div class="bubble-${mine?'out':'in'}">${escapeHtml(x.text||'')}<div class="m-meta">${mine?'You':'Reply'}${x.time?` · ${x.time} ago`:''}</div></div>`;
+      return `<div class="bubble-${mine?'out':'in'}">${escapeHtml(x.text||'')}${mediaHtml(x.media)}<div class="m-meta">${mine?'You':'Reply'}${x.time?` · ${x.time} ago`:''}</div></div>`;
     }).join('');
     return `<div class="conv">
-      <div class="bubble-in">${escapeHtml(m.text)}<div class="m-meta">${escapeHtml(m.handle||m.name)}${m.time?` · ${m.time} ago`:''}</div></div>
+      ${post}
+      <div class="bubble-in">${escapeHtml(m.text)}${mediaHtml(m.media)}<div class="m-meta">${escapeHtml(m.handle||m.name)}${m.time?` · ${m.time} ago`:''}</div></div>
       <div class="conv-note">${m.replies.length} ${m.replies.length===1?'reply':'replies'} on this comment</div>
       ${rows}</div>`;
   }
-  return `<div class="conv"><div class="bubble-in">${escapeHtml(m.text)}<div class="m-meta">${escapeHtml(m.handle)} · ${m.time} ago</div></div></div>`;
+  return `<div class="conv">${post}<div class="bubble-in">${escapeHtml(m.text)}${mediaHtml(m.media)}<div class="m-meta">${escapeHtml(m.handle)} · ${m.time} ago</div></div></div>`;
 }
 function renderDetail(){
   const d=document.getElementById('detail');
@@ -1547,10 +1588,14 @@ function toggleTheme(){const cur=document.documentElement.getAttribute('data-the
 function escapeHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 /* ============ EMOJI PICKER ============ */
 const EMOJI_SET={
-  'Smileys & people':'😀 😃 😄 😁 😆 😅 😂 🤣 🥲 ☺️ 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥳 🤩 😏 😌 😔 🥺 😢 😭 😤 😳 🥹 🤗 🤔 🤭 🤫 🙄 😮‍💨 😴 🤤 🥴 😵‍💫 🤯 🫠 🫡 🫢',
-  'Gestures':'👍 👎 👏 🙌 🙏 🤝 👐 🫶 🤌 🤙 ✌️ 🤞 🤟 🤘 👌 👈 👉 👆 👇 ☝️ ✋ 🤚 👋 💪 🫰 🤲',
-  'Hearts':'❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 🩵',
-  'Fun & symbols':'🔥 ✨ ⭐ 🌟 💫 ⚡ 💥 💯 🎉 🎊 🥂 🎁 👑 🏆 🥇 🚀 💎 🎯 📈 💰 🤑 🎵 🎶 🎸 🎤 🎬 📸 👀 💅 🙌 🤌 🫶 ✅ ⏰ 📌'
+  'Smileys & people':'😀 😃 😄 😁 😆 😅 😂 🤣 🥲 ☺️ 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🥳 🤩 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 😳 🥹 😬 😰 😨 😥 😓 🤗 🤔 🤭 🤫 🤥 😶 😐 😑 🙄 😮‍💨 😏 😴 🤤 😪 😵 😵‍💫 🤐 🥴 🤢 🤮 🤧 😷 🤒 🤕 🤠 🤡 🥳 🥸 🤯 🫠 🫡 🫢 🫣 🫤 🥱 😈 👿 👻 💀 ☠️ 👽 🤖 💩',
+  'Gestures & body':'👍 👎 👏 🙌 🙏 🤝 👐 🫶 🤌 🤏 🤙 ✌️ 🤞 🫰 🤟 🤘 👌 🖐️ ✋ 🤚 🖖 👋 🤛 🤜 👊 ✊ 👈 👉 👆 👇 ☝️ 💪 🦾 🫵 🫳 🫴 🤲 🙇 💁 🙋 🙆 🤦 🤷 💅 👀 👁️ 👅 👄 🧠',
+  'Hearts & love':'❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 🩷 🩵 🩶 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💟 💌 💋 😻 🥰 😍 🫶',
+  'Animals & nature':'🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🙈 🙉 🙊 🐔 🐧 🐦 🐤 🦆 🦅 🦉 🦄 🐝 🦋 🐌 🐞 🐢 🐍 🐙 🦀 🐠 🐟 🐬 🐳 🐋 🦈 🐊 🐅 🐆 🦓 🦍 🐘 🐫 🦒 🐑 🐓 🕊️ 🐾 🌸 💐 🌷 🌹 🌻 🌼 🌵 🌲 🌳 🌴 🍀 🍁 🍃 🌊 🌈 ⭐ 🌙 ☀️ ⛅ ☁️ ❄️ 🔥 💧',
+  'Food & drink':'🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍒 🍑 🥭 🍍 🥥 🥝 🍅 🥑 🌽 🥕 🫑 🥔 🍠 🥐 🍞 🥖 🧀 🥚 🍳 🥞 🧇 🥓 🍔 🍟 🍕 🌭 🥪 🌮 🌯 🥗 🍿 🧂 🍝 🍜 🍣 🍱 🍛 🍚 🍙 🥟 🦪 🍤 🍦 🍰 🎂 🧁 🥧 🍫 🍬 🍭 🍩 🍪 ☕ 🍵 🧋 🥤 🧃 🍺 🍻 🥂 🍷 🥃 🍸 🍹 🍾',
+  'Activity & travel':'⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🎱 🏓 🏸 🥅 🏒 🏑 🥍 🏏 ⛳ 🏹 🎣 🥊 🥋 🎽 🛹 🛼 🛷 ⛸️ 🥌 🎿 🏂 🏋️ 🤸 ⛹️ 🤺 🤾 🏌️ 🏇 🧘 🏄 🏊 🚣 🧗 🚴 🚵 🎪 🎭 🎨 🎬 🎤 🎧 🎼 🎹 🥁 🎷 🎺 🎸 🪕 🎻 🎲 ♟️ 🎯 🎳 🎮 🎰 🚗 🚕 🚙 🚌 🏎️ 🚓 🚑 🚒 🚐 🛻 🚚 🚜 🏍️ 🛵 🚲 ✈️ 🚀 🛸 🚁 ⛵ 🚤 🛳️ ⚓ 🏔️ 🗽 🗼 🏰 🎡 🎢 🏖️ 🏝️ 🏜️ 🌋 🗺️',
+  'Objects':'⌚ 📱 💻 ⌨️ 🖥️ 🖨️ 🖱️ 💾 💿 📷 📸 🎥 📹 📼 🔍 🔦 💡 🔋 🔌 📡 📺 📻 ⏰ ⏱️ ⌛ 📖 📚 📝 ✏️ 🖊️ 🖌️ 📌 📎 ✂️ 📏 📐 🔒 🔑 🔨 🛠️ ⚙️ 🧲 🧪 🔭 💊 💉 🩹 🛒 🎁 🎈 🎀 🪩 📣 📢 🔔 💰 💵 💳 💎 🏆 🥇 🥈 🥉 🏅 👑 💍 👓 🕶️ 👜 🎒',
+  'Symbols & flags':'🔥 ✨ ⭐ 🌟 💫 ⚡ 💥 💯 🎉 🎊 ✅ ❌ ❗ ❓ ‼️ ⁉️ 💢 💬 💭 🗯️ ♻️ ⚠️ 🚫 ✔️ ☑️ 🔝 🔜 🆕 🆒 🆗 🔛 🎯 📈 📉 📊 ➡️ ⬅️ ⬆️ ⬇️ ↗️ ↘️ 🔄 ▶️ ⏸️ ⏭️ 🔀 🔁 ➕ ➖ ✖️ ♾️ 🔢 #️⃣ 🏁 🚩 🏳️ 🏴 🏴‍☠️ 🏳️‍🌈 🇺🇸 🇬🇧 🇨🇦 🇦🇺'
 };
 let __emojiTargetId=null;
 function emojiPanelHtml(){
@@ -1682,13 +1727,17 @@ render();
 
   // 2) Refresh pulls REAL emails when connected, otherwise keeps demo behavior
   const origRefresh = window.refreshMessages;
-  window.refreshMessages = async function(){
+  window.refreshMessages = async function(opts){
+    const auto = !!(opts && opts.auto);
+    if(window.__pulling) return;            // never overlap pulls
     const btn = document.getElementById('refreshBtn');
-    if(btn) btn.classList.add('spin');
-    setTimeout(()=>btn && btn.classList.remove('spin'), 600);
+    if(!auto && btn){ btn.classList.add('spin'); setTimeout(()=>btn.classList.remove('spin'), 600); }
     if(!window.__live) return origRefresh();
+    window.__pulling = true;
     try{
-      const emails = await fetch('/api/messages?today='+encodeURIComponent(localYMD())).then(r=>r.json());
+      // Manual Refresh forces a live pull (&fresh=1); the automatic poll lets the
+      // server serve its short cache so Instagram's rate limit isn't hammered.
+      const emails = await fetch('/api/messages?today='+encodeURIComponent(localYMD())+(auto?'':'&fresh=1')).then(r=>r.json());
       window.fetchStats && window.fetchStats(); // refresh recorded history after the pull
       let added = 0;
       emails.forEach(e=>{
@@ -1696,7 +1745,7 @@ render();
         const nm = { id: idc++, ch: e.ch || 'email', name:e.name, handle:e.handle, text:e.text,
                      intent: classifyIntent(e.text), topic:'', time:e.time, live:true, gid:e.gid,
                      threadId:e.threadId, subject:e.subject, thread:e.thread, replies:e.replies, acct:e.acct, acctLabel:e.acctLabel,
-                     brand:e.brand, brandLabel:e.brandLabel };
+                     brand:e.brand, brandLabel:e.brandLabel, media:e.media, post:e.post };
         MESSAGES.unshift(nm);
         state.drafts[nm.id] = e.draft || generateDraft(nm);
         added++;
@@ -1723,13 +1772,19 @@ render();
       if(state.view === 'fans') renderFans();
       else if(state.view === 'analytics') renderAnalytics();
       else if(state.view === 'activity') renderActivity();
-      else if(state.view !== 'inbox') setView('inbox');
-      else render();
-      const parts=[];
-      if(added) parts.push(`${added} new`);
-      if(cleared) parts.push(`${cleared} already handled cleared`);
-      toast(parts.length ? parts.join(' · ') : 'No new messages right now');
-    }catch(err){ window.__loading = false; render(); toast('Could not reach your inbox'); }
+      else if(state.view === 'inbox') render();
+      else if(!auto) setView('inbox');
+      if(auto){
+        // Silent unless something new actually arrived — no toast spam every poll.
+        if(added) toast(`${added} new message${added>1?'s':''} came in`);
+      } else {
+        const parts=[];
+        if(added) parts.push(`${added} new`);
+        if(cleared) parts.push(`${cleared} already handled cleared`);
+        toast(parts.length ? parts.join(' · ') : 'No new messages right now');
+      }
+    }catch(err){ window.__loading = false; if(!auto){ render(); toast('Could not reach your inbox'); } }
+    finally{ window.__pulling = false; }
   };
 
   // 3) Approving a REAL email actually sends it through Gmail
@@ -1755,8 +1810,16 @@ render();
   window.approve = wrapSend(window.approve);
   window.approveAndLearn = wrapSend(window.approveAndLearn);
 
-  // 4) Auto-pull once on load if already connected
-  if(window.__live){ setTimeout(()=>window.refreshMessages(), 400); }
+  // 4) Auto-pull once on load if already connected, then keep checking for new
+  // comments/DMs on a timer so Kim doesn't have to hit Refresh. The server
+  // throttles the live platform pulls, so this is cheap; render() preserves her
+  // scroll position and cursor, so an auto-update never bounces her around.
+  if(window.__live){
+    setTimeout(()=>window.refreshMessages(), 400);
+    if(!window.__autoPoll){
+      window.__autoPoll = setInterval(()=>{ if(!document.hidden) window.refreshMessages({auto:true}); }, 45000);
+    }
+  }
 })();
 </script>
 </body>
