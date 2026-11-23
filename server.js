@@ -468,6 +468,18 @@ app.get('/api/messages', async (req, res) => {
   const anyConnected = store.email.length || store.youtube.length || store.instagram.length ||
     store.facebook.length || store.threads.length || store.discord.length;
   if (!anyConnected) return res.json([]);
+  // Serve a short-lived cache so the client's automatic polling doesn't re-hit
+  // every platform API on each call — this protects Instagram's hourly rate
+  // limit (heavy per-poll fetching once zeroed out the DMs). Manual Refresh sends
+  // ?fresh=1 to force a live pull, but even that respects a small floor. The
+  // cache is re-filtered against the current replied/skipped sets each time, so
+  // an item handled since the last pull never flashes back into the inbox.
+  const force = req.query.fresh === '1';
+  const age = store._cacheAt ? (Date.now() - store._cacheAt) : Infinity;
+  const SOFT_MS = 40000, FLOOR_MS = 8000;
+  if (Array.isArray(store.cache) && store.cache.length && (force ? age < FLOOR_MS : age < SOFT_MS)) {
+    return res.json(store.cache.filter(it => !store.replied.has(it.gid) && !store.skipped.has(it.gid)));
+  }
   try {
     let items = [];
     // Tag every item with which account it came from, then collect it.
@@ -521,6 +533,7 @@ app.get('/api/messages', async (req, res) => {
     // NOTE: drafts are generated on the client (instant), not here — pre-drafting
     // thousands of items server-side was slow and (with an AI key) impractical.
     store.cache = items;
+    store._cacheAt = Date.now();
     res.json(items);
   } catch (e) {
     console.error('list error', e.message);
